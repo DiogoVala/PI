@@ -1,12 +1,18 @@
+/* Tests external interrupt and prints via USB
+ *  Diogo Vala
+ */
+
 #define HWSERIAL Serial1
-#define ledPin LED_BUILTIN
 #define digpin 2
 
 static int16_t baudrate = 9600;
+/*  Data bits - 8
+    Parity    - None
+    Stop bits - 1
+*/
 volatile int adcval;
 
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(baudrate); //
   attachInterrupt(digitalPinToInterrupt(digpin), extISR, RISING);
   pinMode(3, OUTPUT);
@@ -19,9 +25,7 @@ void extISR() {
 
 elapsedMillis timer; // Counts microseconds since program start
 
-
 void loop() {
-  // put your main code here, to run repeatedly:
   int incomingByte;
 
   if(flag==true){
@@ -37,14 +41,5 @@ void loop() {
   }
   else{
     timer=0;
-  }
-  
-  
-  
-  // FOR USB CONNECTION
-  if (Serial.available() > 0) {
-    incomingByte = Serial.read(); // Byte is received in DECIMAL format
-    Serial.print("USB received ASCII: ");
-    Serial.println(incomingByte, DEC);
   }
 }
