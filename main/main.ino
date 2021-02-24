@@ -53,7 +53,7 @@ void START() {
   }
   else
   {
-    state = 6;
+    state = 6; // Alarme
   }
 }
 
@@ -68,7 +68,7 @@ void PREHEAT() {
   }
   else
   {
-    state = 6;
+    state = 6; // Alarme
   }
 }
 
@@ -87,7 +87,7 @@ void SEALING() {
   }
   else
   {
-    state = 6;
+    state = 6; // Alarme
   }
 }
 
@@ -126,18 +126,18 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(D3Pin), SEALING, CHANGE); // Sealing
   attachInterrupt(digitalPinToInterrupt(D4Pin), RESET, RISING); // Reset
   attachInterrupt(digitalPinToInterrupt(D8Pin), ZEROPASS, RISING); // Passagem por zero
-  pinMode(A0Pin, INPUT); 
-  pinMode(A1Pin, INPUT);
-  pinMode(A2Pin, INPUT);
-  pinMode(D0Pin, INPUT);
-  pinMode(D1Pin, INPUT);
-  pinMode(D2Pin, INPUT);
-  pinMode(D3Pin, INPUT);
-  pinMode(D4Pin, INPUT);
-  pinMode(D5Pin, OUTPUT);
-  pinMode(D6Pin, OUTPUT);
-  pinMode(D7Pin, OUTPUT);
-  pinMode(D8Pin, INPUT);
+  pinMode(A0Pin, INPUT); // Pot
+  pinMode(A1Pin, INPUT); // Current sensor
+  pinMode(A2Pin, INPUT); // Voltage sensor
+  pinMode(D0Pin, INPUT); // Enable
+  pinMode(D1Pin, INPUT); // Start 
+  pinMode(D2Pin, INPUT); // Pre-heat
+  pinMode(D3Pin, INPUT); // Sealing
+  pinMode(D4Pin, INPUT); // Reset 
+  pinMode(D5Pin, OUTPUT); // Alarm
+  pinMode(D6Pin, OUTPUT); // PWM output for controller
+  pinMode(D7Pin, OUTPUT); // Controller On/Off
+  pinMode(D8Pin, INPUT); // Passagem por zero
   digitalWrite(D5Pin, LOW);
   digitalWrite(D6Pin, LOW);
   digitalWrite(D7Pin, LOW);
@@ -196,7 +196,7 @@ void loop() {
       break;
     default:
       alarme();
-    break;
+      break;
   }
   duty = analogRead(A0Pin);
 
