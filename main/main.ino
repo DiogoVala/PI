@@ -13,9 +13,20 @@
 #define D7Pin 9 // Digital 7 - Controller On/Off
 #define D8Pin 10 // Digital 8 - Passagem por zero
 
+//Uart
+static uint16_t baudrate = 9600;
+//Sensores
+static double current_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
+static uint16_t current_K2 = 1000; // Constante de conversão do transformador de corrente
+static double voltage_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
+//Controlo
+static uint16_t PID_Kp = 1;
+static uint16_t PID_Ki = 1;
+static uint16_t PID_Kd = 1;
+static uint16_t integralClamp = 100;
 
-static int16_t baudrate = 9600;
-volatile int8_t state = 0;
+//Logica
+volatile uint8_t state = 0;
 /*  0 - Sistema Desligado
  *  1 - Sistema Ligado
  *  2 - Inicio de ciclo
@@ -24,12 +35,18 @@ volatile int8_t state = 0;
  *  5 - Selagem
  *  6 - Alarme
 */
-volatile int16_t setpoint=0; // 0 to ~400º
-volatile int16_t temp_preheat=0;  // 0 to ~400º
-volatile int16_t temp=0; // 0 to ~400º
-volatile int16_t period=0; //0 to ~21000
-volatile int16_t duty=0; // 0 to 4095
-
+volatile uint16_t setpoint=0; // 0 to ~400º
+volatile uint16_t temp_preheat=0;  // 0 to ~400º
+volatile uint16_t temp=0; // 0 to ~400º
+volatile uint16_t period=0; //0 to ~21000
+volatile uint16_t duty=0; // 0 to 4095
+//Sensores
+volatile double current=0;
+volatile double voltage=0;
+//Controlo
+volatile int64_t integral = 0;
+volatile int64_t derivative = 0;
+volatile uint16_t dc=0;
 
 void ENABLE() {
   if(digitalRead(D0Pin) == 0)
@@ -97,10 +114,9 @@ void RESET() {
     state = 0;  
   }
 }
+
 elapsedMicros timer;
-
 volatile bool periodflag=false;
-
 void ZEROPASS() {
   if(digitalRead(D3Pin) == 1 && periodflag == false)
   {
@@ -114,6 +130,80 @@ void ZEROPASS() {
     periodflag=false;
   }
 }
+
+void turnOff()
+{
+}
+
+void turnOn()
+{
+}
+
+void standby()
+{
+}
+
+void preheat()
+{
+  
+}
+
+void setTemp()
+{
+  uint16_t new_dc=dc;
+  int16_t temp_error=temp-setpoint;
+  integral+=temp_error;
+  if (integral > integralClamp) integral = integralClamp; // Positive clamping to avoid wind-up
+  if (integral < -integralClamp) integral = -integralClamp; // Negative clamping to avoid wind-up
+
+  
+  new_dc+=(PID_Kp*temp_error)+(PID_Ki*integral); // Falta a componente derivativa
+
+  if (new_dc > 4095) {
+    new_dc = 4095;
+  } else if (new_dc < 0) {
+    new_dc = 0;
+  } else {
+    new_dc = new_dc;
+  }
+  analogWrite(D6Pin, new_dc); // Sinal de controlo do controlador
+}
+
+void alarme()
+{
+}
+
+void sampleCurrent()
+{
+  float sample=0;
+  sample = analogRead(A1Pin);
+  sample = sample*3300/4095; 
+  sample = sample-1650;
+  sample = sample/current_K1;
+  sample = sample*current_K2/1000;
+  current=sample;
+  Serial.print("Corrente: ");
+  Serial.print(sample);
+  Serial.println(" Ap");
+}
+
+void sampleVoltage()
+{
+  float sample=0;
+  sample = analogRead(A2Pin);
+  sample = sample*3300/4095;
+  sample = sample-1650;
+  sample = sample*voltage_K1/1000;
+  Serial.print("Tensao: ");
+  Serial.print(sample);
+  Serial.println(" Vp");
+  voltage=sample;
+}
+
+void calcTemp()
+{
+}
+
 
 void setup() {
   Serial.begin(baudrate);
@@ -141,39 +231,14 @@ void setup() {
   digitalWrite(D5Pin, LOW);
   digitalWrite(D6Pin, LOW);
   digitalWrite(D7Pin, LOW);
-  analogWriteResolution(12); // 2-15bits 
-  analogWrite(D6Pin, duty); //PWM Output
-
+  analogWriteResolution(12); // 2-15bits | A 12 bits, a frequencia e 36621.09 Hz (teensy 4.1 doc)
+  analogWrite(D6Pin, 0); // Sinal de controlo do controlador
 }
 
-void turnOff()
-{
-}
-
-void turnOn()
-{
-}
-
-void standby()
-{
-}
-
-void preheat()
-{
-  
-}
-
-void setTemp()
-{
-}
-
-void alarme()
-{
-}
-
+elapsedMillis timer1;
 void loop() {
   // put your main code here, to run repeatedly:
-  
+  //noInterrupts();
   switch(state)
   {
     case 0:
@@ -198,8 +263,11 @@ void loop() {
       alarme();
       break;
   }
-  duty = analogRead(A0Pin);
-
-  Serial.println(duty);
-
+  while(timer1<=200);
+  Serial.print("\n\x1b[2J\r"); //Clear screen
+  sampleCurrent();
+  sampleVoltage();
+  calcTemp();
+  timer1=0;
+  
 }
