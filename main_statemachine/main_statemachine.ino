@@ -9,8 +9,8 @@
 #define ResetIO 6 // Digital 4 - ResetIO 
 #define AlarmIO 7 // Digital 5 - Alarm
 
-#define D6Pin 8 // Digital 6 - PWM output for controller
-#define D7Pin 9 // Digital 7 - Controller On/Off
+#define PWMout 8 // Digital 6 - PWM output for controller
+#define con_OnOff 9 // Digital 7 - Controller On/Off
 #define Zeropass 10 // Digital 8 - Passagem por zero
 
 //Uart
@@ -44,8 +44,8 @@ typedef enum sm_state_t
 {
   st_OFF,
   st_ON,
-  st_CYCLESTART,
-  st_PREHEATING,
+  st_CYCLESTART_ISR,
+  st_PREHEAT_ISRING,
   st_RAISETEMP,
   st_SEAL,
   st_ALARM
@@ -55,16 +55,16 @@ typedef enum sm_state_t
 typedef enum sm_event_t
 {
   ev_NULL,
-  ev_ENABLE_HIGH,
-  ev_ENABLE_LOW,
-  ev_START_HIGH,
-  ev_START_LOW,
-  ev_PREHEAT_HIGH,
-  ev_PREHEAT_LOW,
-  ev_SEALING_HIGH,
-  ev_SEALING_LOW,
+  ev_ENABLE_ISR_HIGH,
+  ev_ENABLE_ISR_LOW,
+  ev_START_ISR_HIGH,
+  ev_START_ISR_LOW,
+  ev_PREHEAT_ISR_HIGH,
+  ev_PREHEAT_ISR_LOW,
+  ev_SEALING_ISR_HIGH,
+  ev_SEALING_ISR_LOW,
   ev_TEMPSET,
-  ev_RESET,
+  ev_RESET_ISR,
   ev_ALARM
 
 } sm_event_t;
@@ -110,7 +110,7 @@ void sm_execute(sm_t *psm)
   {
     case st_OFF:
       /* State Actions*/
-      if(event == ev_ENABLE_HIGH)
+      if(event == ev_ENABLE_ISR_HIGH)
       {
         /*Transition actions*/
         psm->current_state=st_ON;
@@ -119,31 +119,31 @@ void sm_execute(sm_t *psm)
 
     case st_ON:
       /* State Actions*/
-      if(event == ev_ENABLE_LOW)
+      if(event == ev_ENABLE_ISR_LOW)
       {
         /*Transition actions*/
         psm->current_state=st_OFF;
       }
-      else if( event == ev_START_HIGH)
+      else if( event == ev_START_ISR_HIGH)
       {
         /*Transition actions*/
-        psm->current_state=st_CYCLESTART;
+        psm->current_state=st_CYCLESTART_ISR;
       }
       break;
     
-    case st_CYCLESTART:
+    case st_CYCLESTART_ISR:
       /* State Actions*/
-      if(event == ev_PREHEAT_HIGH)
+      if(event == ev_PREHEAT_ISR_HIGH)
       {
         /*Transition actions*/
-        psm->current_state=st_PREHEATING;
+        psm->current_state=st_PREHEAT_ISRING;
       }
-      else if( event == ev_SEALING_HIGH)
+      else if( event == ev_SEALING_ISR_HIGH)
       {
         /*Transition actions*/
         psm->current_state=st_RAISETEMP;
       }
-      else if( event == ev_RESET)
+      else if( event == ev_RESET_ISR)
       {
         /*Transition actions*/
         if(EnableIO == 1)
@@ -159,19 +159,19 @@ void sm_execute(sm_t *psm)
       }
       break;
       
-    case st_PREHEATING:
+    case st_PREHEAT_ISRING:
       /* State Actions*/
-      if(event == ev_PREHEAT_LOW)
+      if(event == ev_PREHEAT_ISR_LOW)
       {
         /*Transition actions*/
-        psm->current_state=st_CYCLESTART;
+        psm->current_state=st_CYCLESTART_ISR;
       }
-      else if(event == ev_SEALING_HIGH)
+      else if(event == ev_SEALING_ISR_HIGH)
       {
         /*Transition actions*/
         psm->current_state=st_RAISETEMP;
       }
-      else if( event == ev_RESET)
+      else if( event == ev_RESET_ISR)
       {
         if(EnableIO == 1)
         {
@@ -193,7 +193,7 @@ void sm_execute(sm_t *psm)
         /*Transition actions*/
         psm->current_state=st_SEAL;
       }
-      else if( event == ev_RESET)
+      else if( event == ev_RESET_ISR)
       {
         if(EnableIO == 1)
         {
@@ -210,12 +210,12 @@ void sm_execute(sm_t *psm)
     
     case st_SEAL:
       /* State Actions*/
-      if(event == ev_SEALING_LOW)
+      if(event == ev_SEALING_ISR_LOW)
       {
         /*Transition actions*/
-        psm->current_state=st_CYCLESTART;
+        psm->current_state=st_CYCLESTART_ISR;
       }
-      else if( event == ev_RESET)
+      else if( event == ev_RESET_ISR)
       {
         if(EnableIO == 1)
         {
@@ -236,77 +236,61 @@ void sm_execute(sm_t *psm)
   }
 }
 
-void ENABLE() {
+void ENABLE_ISR() {
   if(digitalRead(EnableIO) == 0)
   {
-    sm_send_event(&SM, ev_ENABLE_LOW);
+    sm_send_event(&SM, ev_ENABLE_ISR_LOW);
   }
   else
   {
-    sm_send_event(&SM, ev_ENABLE_HIGH);
-    state = 1; // Sistema ligado
+    sm_send_event(&SM, ev_ENABLE_ISR_HIGH);
   }
 }
 
-void START() {
-  if(digitalRead(StartIO) == 0 && state == 2)
+void START_ISR() {
+  if(digitalRead(StartIO) == 0)
   {
-    state = 1; // Sistema Ligado
-  }
-  else if( digitalRead(StartIO) == 1 && state == 1)
-  {
-    state = 2; // Inicio de ciclo
+    sm_send_event(&SM, ev_START_ISR_LOW);
   }
   else
   {
-    state = 6; // Alarme
+    sm_send_event(&SM, ev_START_ISR_HIGH);
   }
 }
 
-void PREHEAT() {
-  if(digitalRead(PreheatIO) == 0 && state == 2)
+void PREHEAT_ISR() {
+  if(digitalRead(PreheatIO) == 0)
   {
-    state = 2; // Inicio de ciclo
-  }
-  else if( digitalRead(PreheatIO) == 1 && state == 2)
-  {
-    state = 3; // Pre-heat
+    sm_send_event(&SM, ev_PREHEAT_ISR_LOW);
   }
   else
   {
-    state = 6; // Alarme
+    sm_send_event(&SM, ev_PREHEAT_ISR_HIGH);
   }
 }
 
-void SEALING() {
-  if(digitalRead(SealingIO) == 0 && state == 2)
+void SEALING_ISR() {
+  if(digitalRead(SealingIO) == 0)
   {
-    state = 2; // Inicio de ciclo
-  }
-  else if( digitalRead(SealingIO) == 1 && ( state == 2 || state ==3))
-  {
-    state = 4; // Aumentar Temp
-  }
-  else if( digitalRead(SealingIO) == 0 && state == 5)
-  {
-    state = 2; // Inicio de ciclo
+    sm_send_event(&SM, ev_SEALING_ISR_LOW);
   }
   else
   {
-    state = 6; // Alarme
+    sm_send_event(&SM, ev_SEALING_ISR_HIGH);
   }
+
 }
 
-void RESET() {
+void RESET_ISR() {
   if(digitalRead(ResetIO == 1))
   {
-    state = 0;  
+    sm_send_event(&SM, ev_RESET_ISR); 
   }
 }
 
 elapsedMicros timer;
 volatile bool periodflag=false;
-void ZEROPASS() {
+void ZEROPASS_ISR() {
   if(digitalRead(SealingIO) == 1 && periodflag == false)
   {
     period=timer;
@@ -318,23 +302,6 @@ void ZEROPASS() {
   {
     periodflag=false;
   }
-}
-
-void turnOff()
-{
-}
-
-void turnOn()
-{
-}
-
-void standby()
-{
-}
-
-void preheat()
-{
-  
 }
 
 void setTemp()
@@ -355,11 +322,7 @@ void setTemp()
   } else {
     new_dc = new_dc;
   }
-  analogWrite(D6Pin, new_dc); // Sinal de controlo do controlador
-}
-
-void alarme()
-{
+  analogWrite(PWMout, new_dc); // Sinal de controlo do controlador
 }
 
 void sampleCurrent()
@@ -393,64 +356,55 @@ void calcTemp()
 {
 }
 
-
 void setup() {
+  //Uart settings
+  /*  
+   *   Data bits - 8
+   *   Parity    - None
+   *   Stop bits - 1
+   */
   Serial.begin(baudrate);
+  
+  //Attach Interrupts
+  attachInterrupt(digitalPinToInterrupt(EnableIO), ENABLE_ISR, CHANGE); // EnableIO
+  attachInterrupt(digitalPinToInterrupt(StartIO), START_ISR, CHANGE); // StartIO 
+  attachInterrupt(digitalPinToInterrupt(PreheatIO), PREHEAT_ISR, CHANGE); // Pre-heat
+  attachInterrupt(digitalPinToInterrupt(SealingIO), SEALING_ISR, CHANGE); // SealingIO
+  attachInterrupt(digitalPinToInterrupt(ResetIO), RESET_ISR, RISING); // ResetIO
+  attachInterrupt(digitalPinToInterrupt(Zeropass), ZEROPASS_ISR, RISING); // Passagem por zero
+  
+  //Analog Pins
   analogReadRes(12); //12 bit ADC
-
-  // put your setup code here, to run once:
-  attachInterrupt(digitalPinToInterrupt(EnableIO), ENABLE, CHANGE); // EnableIO
-  attachInterrupt(digitalPinToInterrupt(StartIO), START, CHANGE); // StartIO 
-  attachInterrupt(digitalPinToInterrupt(PreheatIO), PREHEAT, CHANGE); // Pre-heat
-  attachInterrupt(digitalPinToInterrupt(SealingIO), SEALING, CHANGE); // SealingIO
-  attachInterrupt(digitalPinToInterrupt(ResetIO), RESET, RISING); // ResetIO
-  attachInterrupt(digitalPinToInterrupt(Zeropass), ZEROPASS, RISING); // Passagem por zero
   pinMode(A0Pin, INPUT); // Pot
   pinMode(A1Pin, INPUT); // Current sensor
   pinMode(A2Pin, INPUT); // Voltage sensor
+  
+  //Digital Pins
   pinMode(EnableIO, INPUT); // EnableIO
   pinMode(StartIO, INPUT); // StartIO 
   pinMode(PreheatIO, INPUT); // Pre-heat
   pinMode(SealingIO, INPUT); // SealingIO
   pinMode(ResetIO, INPUT); // ResetIO 
   pinMode(AlarmIO, OUTPUT); // Alarm
-  pinMode(D6Pin, OUTPUT); // PWM output for controller
-  pinMode(D7Pin, OUTPUT); // Controller On/Off
+  pinMode(PWMout, OUTPUT); // PWM output for controller
+  pinMode(con_OnOff, OUTPUT); // Controller On/Off
   pinMode(Zeropass, INPUT); // Passagem por zero
+
+  //Initialize digital outputs
   digitalWrite(AlarmIO, LOW);
-  digitalWrite(D6Pin, LOW);
-  digitalWrite(D7Pin, LOW);
-  analogWriteResolution(12); // 2-15bits | A 12 bits, a frequencia e 36621.09 Hz (teensy 4.1 doc)
-  analogWrite(D6Pin, 0); // Sinal de controlo do controlador
+  digitalWrite(PWMout, LOW);
+  digitalWrite(con_OnOff, LOW);
+  //PWM initialization
+  analogWriteResolution(12); // With 12 bits, the frequency is 36621.09 Hz (teensy 4.1 doc)
+  analogWrite(PWMout, 0); // Power controller control signal
+
+  //Initialize state machine
+  sm_init(SM, st_OFF);
 }
 
 elapsedMillis timer1;
 void loop() {
   // put your main code here, to run repeatedly:
-  //noInterrupts();
-  switch(state)
-  {
-    case 0:
-      turnOff();
-      break;
-    case 1:
-      turnOn();
-      break;
-    case 2:
-      standby();
-      break;
-    case 3:
-      preheat();
-      break;
-    case 4:
-      setTemp();
-      break;
-    case 5:
-      // acender led para mostrar que se atingiu a temp. pretendida e que está a selar
-      break;
-    default:
-      alarme();
-      break;
   }
   while(timer1<=200);
   Serial.print("\n\x1b[2J\r"); //Clear screen
