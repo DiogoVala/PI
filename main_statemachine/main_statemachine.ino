@@ -100,7 +100,7 @@ void sm_execute(sm_t *psm)
 {
   /* To do:
    *-transições para o estado de alarme
-   *-transição do estado de alarme para a iniciação do sistema
+   *-transição do estado de alarme para a iniciação do sistema (reset)
    *-ações de cada estado
    *-ações de transição
   */
@@ -145,7 +145,6 @@ void sm_execute(sm_t *psm)
       }
       else if( event == ev_RESET_ISR)
       {
-        /*Transition actions*/
         if(EnableIO == 1)
         {
           /*Transition actions*/
@@ -278,7 +277,6 @@ void SEALING_ISR() {
   {
     sm_send_event(&SM, ev_SEALING_ISR_HIGH);
   }
-
 }
 
 void RESET_ISR() {
