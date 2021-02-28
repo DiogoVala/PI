@@ -1,3 +1,6 @@
+#include "sm_t.h"
+#include "sm_t.c" // Error if i don't include the .c file as well
+
 #define A0Pin 14 // Analog input 0 - Pot
 #define A1Pin 15 // Analog input 1 - Current
 #define A2Pin 16 // Analog input 2 - Voltage
@@ -39,62 +42,7 @@ volatile int64_t integral = 0;
 volatile int64_t derivative = 0;
 volatile uint16_t dc=0;
 
-// State machine states
-typedef enum sm_state_t
-{
-  st_OFF,
-  st_ON,
-  st_CYCLESTART_ISR,
-  st_PREHEAT_ISRING,
-  st_RAISETEMP,
-  st_SEAL,
-  st_ALARM
-} sm_state_t;
-
-// State machine events
-typedef enum sm_event_t
-{
-  ev_NULL,
-  ev_ENABLE_ISR_HIGH,
-  ev_ENABLE_ISR_LOW,
-  ev_START_ISR_HIGH,
-  ev_START_ISR_LOW,
-  ev_PREHEAT_ISR_HIGH,
-  ev_PREHEAT_ISR_LOW,
-  ev_SEALING_ISR_HIGH,
-  ev_SEALING_ISR_LOW,
-  ev_TEMPSET,
-  ev_RESET_ISR,
-  ev_ALARM
-
-} sm_event_t;
-
-//State machine definition
-#define sm_state_t int
-typedef struct sm_t
-{
-  sm_state_t current_state;
-  sm_state_t initial_state;
-  sm_event_t last_event;
-} sm_t;
-
-sm_t SM; // State Machine declaration
-
-void sm_init(sm_t *psm, sm_state_t initial_state)
-{
-  psm->current_state=initial_state;
-  psm->initial_state=initial_state;
-  psm->last_event=ev_NULL;
-}
-void sm_send_event(sm_t *psm, sm_event_t event)
-{
-  psm->last_event=event;
-}
-
-sm_state_t sm_get_current_state(sm_t *psm)
-{
-  return psm->current_state;
-}
+sm_t SM;
 
 void sm_execute(sm_t *psm)
 {
@@ -397,13 +345,12 @@ void setup() {
   analogWrite(PWMout, 0); // Power controller control signal
 
   //Initialize state machine
-  sm_init(SM, st_OFF);
+  sm_init(&SM, st_OFF);
 }
 
 elapsedMillis timer1;
 void loop() {
   // put your main code here, to run repeatedly:
-  }
   while(timer1<=200);
   Serial.print("\n\x1b[2J\r"); //Clear screen
   sampleCurrent();
