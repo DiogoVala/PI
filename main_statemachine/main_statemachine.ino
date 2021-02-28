@@ -26,15 +26,6 @@ static uint16_t PID_Ki = 1;
 static uint16_t integralClamp = 100;
 
 //Logica
-volatile uint8_t state = 0;
-/*  0 - Sistema Desligado
- *  1 - Sistema Ligado
- *  2 - Inicio de ciclo
- *  3 - Pre-heat
- *  4 - Aumentar Temp
- *  5 - Selagem
- *  6 - Alarme
-*/
 volatile uint16_t setpoint=0; // 0 to ~400º
 volatile uint16_t temp_preheat=0;  // 0 to ~400º
 volatile uint16_t temp=0; // 0 to ~400º
@@ -88,14 +79,6 @@ typedef struct sm_t
 } sm_t;
 
 sm_t SM; // State Machine declaration
-/*
-void sm_init(sm_t *psm, sm_state_t initial_state);
-void sm_reset(sm_t *psm);
-sm_state_t sm_get_current_state(sm_t *psm);
-void sm_send_event(sm_t *psm, sm_event_t event);
-void sm_execute_AB(sm_t *psm);
-void sm_execute_XYZ(sm_t *psm);
-*/
 
 void sm_init(sm_t *psm, sm_state_t initial_state)
 {
@@ -122,6 +105,7 @@ void sm_execute(sm_t *psm)
    *-ações de transição
   */
   sm_event_t event=psm->last_event;
+  
   switch((sm_state_t)event)
   {
     case st_OFF:
@@ -256,7 +240,6 @@ void ENABLE() {
   if(digitalRead(EnableIO) == 0)
   {
     sm_send_event(&SM, ev_ENABLE_LOW);
-    state = 0; // Sistema desligado
   }
   else
   {
