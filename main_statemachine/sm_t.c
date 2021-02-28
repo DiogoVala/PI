@@ -1,3 +1,10 @@
+/* 
+ * File:   sm_t.c
+ * Author: Diogo Vala & Diogo Fernandes
+ *
+ * Overview: Define state machine 
+ */
+
 #include "sm_t.h"
 
 void sm_init(sm_t *psm, sm_state_t initial_state)

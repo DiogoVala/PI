@@ -357,5 +357,4 @@ void loop() {
   sampleVoltage();
   calcTemp();
   timer1=0;
-  
 }
