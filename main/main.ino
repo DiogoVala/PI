@@ -1,163 +1,299 @@
+/*
+   File:   main.ino
+   Author: Diogo Vala & Diogo Fernandes
+
+   Overview: Termorregulador Digital
+*/
+/*TO DO
+    -Incluir componente derivativa no controlador
+    -Terminar a função sm_execute()
+      -transições para o estado de alarme
+      -transição do estado de alarme para a iniciação do sistema (reset)
+      -ações de cada estado
+      -ações de transição
+    -Cálculo do True RMS
+    -Organizar o funcionamento do loop
+    -Device driver - Ethernet
+    -Device driver - Display
+*/
+
+#include "statemachine.h"
+#include "statemachine.c"
+
 #define A0Pin 14 // Analog input 0 - Pot
 #define A1Pin 15 // Analog input 1 - Current
 #define A2Pin 16 // Analog input 2 - Voltage
 
-#define D0Pin 2 // Digital 0 - Enable
-#define D1Pin 3 // Digital 1 - Start 
-#define D2Pin 4 // Digital 2 - Pre-heat
-#define D3Pin 5 // Digital 3 - Sealing
-#define D4Pin 6 // Digital 4 - Reset 
-#define D5Pin 7 // Digital 5 - Alarm
+#define EnableIO 2 // Digital 0 - Enable
+#define StartIO 3 // Digital 1 - Start
+#define PreheatIO 4 // Digital 2 - Pre-heat
+#define SealingIO 5 // Digital 3 - Sealing
+#define ResetIO 6 // Digital 4 - Reset
+#define AlarmIO 7 // Digital 5 - Alarm
 
-#define D6Pin 8 // Digital 6 - PWM output for controller
-#define D7Pin 9 // Digital 7 - Controller On/Off
-#define D8Pin 10 // Digital 8 - Passagem por zero
+#define PWMout 8 // Digital 6 - PWM output for controller
+#define con_OnOff 9 // Digital 7 - Controller On/Off
+#define Zerocross 10 // Digital 8 - Passagem por zero
 
 //Uart
-static uint16_t baudrate = 9600;
-//Sensores
-static double current_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
-static uint16_t current_K2 = 1000; // Constante de conversão do transformador de corrente
-static double voltage_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
-//Controlo
-static uint16_t PID_Kp = 1;
-static uint16_t PID_Ki = 1;
-static uint16_t PID_Kd = 1;
-static uint16_t integralClamp = 100;
+static uint16_t BAUDRATE = 9600;
 
-//Logica
-volatile uint8_t state = 0;
-/*  0 - Sistema Desligado
- *  1 - Sistema Ligado
- *  2 - Inicio de ciclo
- *  3 - Pre-heat
- *  4 - Aumentar Temp
- *  5 - Selagem
- *  6 - Alarme
-*/
-volatile uint16_t setpoint=0; // 0 to ~400º
-volatile uint16_t temp_preheat=0;  // 0 to ~400º
-volatile uint16_t temp=0; // 0 to ~400º
-volatile uint16_t period=0; //0 to ~21000
-volatile uint16_t duty=0; // 0 to 4095
 //Sensores
-volatile double current=0;
-volatile double voltage=0;
+static double CURRENT_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
+static uint16_t CURRENT_K2 = 1000; // Constante de conversão do transformador de corrente
+static double VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
+static double TEMP_COEF = 0.00385; // Example of temperature coefficient
+static double R_ZERO = 1; //Resistance of heatband at 0ºC
+volatile double current = 0; // Peak current value
+volatile double voltage = 0; // Peak voltage value
+volatile double currentRMS = 0; // True RMS current
+volatile double voltageRMS = 0; // True RMS voltage
+volatile double resistance = 0; // Vrms/Irms
+
 //Controlo
-volatile int64_t integral = 0;
-volatile int64_t derivative = 0;
-volatile uint16_t dc=0;
+volatile double setpoint = 0; // 0 to ~400º - Value defined by user
+volatile uint16_t temp_preheat = 0; // 0 to ~400º - Value defined by user
+volatile double temperature = 0; // 0 to ~400º - Calculated value from resitance
+static uint16_t PID_KP = 1; // Proportional gain of PID
+static uint16_t PID_KI = 1; // Integral gain of PID
+//static uint16_t PID_KD = 1; // Derivative gain of PID
+static uint16_t INTEGRAL_CLAMP = 1000;
+volatile int64_t integral = 0; // Integral component of PID
+volatile int64_t derivative = 0; // Derivative component of PID
+volatile uint16_t duty_cycle = 0; // 0 to 4095 - PWM duty cycle for the control signal
+
+//Old state of input signals for polling
+volatile uint8_t EnableIO_old;
+volatile uint8_t StartIO_old;
+volatile uint8_t PreheatIO_old;
+volatile uint8_t SealingIO_old;
+volatile uint8_t ResetIO_old;
+
+//Timing
+elapsedMillis PollingTimer;
+elapsedMillis SampleTimer;
+elapsedMicros ZeroCrossTimer;
+static uint8_t POLLING_PERIOD = 10; // Period in ms
+static uint8_t SAMPLING_PERIOD = 10; // Period in ms
+volatile bool periodflag = false; // Flag used to measure period between every other zero crossing
+volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period of mains to be used for True RMS
+
+sm_t SM;
+
+void sm_execute(sm_t *psm)
+{
+  /* To do:
+    -transições para o estado de alarme
+    -transição do estado de alarme para a iniciação do sistema (reset)
+    -ações de cada estado
+    -ações de transição
+  */
+  sm_event_t event = psm->last_event;
+
+  switch ((sm_state_t)event)
+  {
+    case st_OFF:
+      /* State Actions*/
+      if (event == ev_ENABLE_HIGH)
+      {
+        /*Transition actions*/
+        psm->current_state = st_ON;
+      }
+      break;
+
+    case st_ON:
+      /* State Actions*/
+      if (event == ev_ENABLE_LOW)
+      {
+        /*Transition actions*/
+        psm->current_state = st_OFF;
+      }
+      else if ( event == ev_START_HIGH)
+      {
+        /*Transition actions*/
+        psm->current_state = st_CYCLESTART;
+      }
+      break;
+
+    case st_CYCLESTART:
+      /* State Actions*/
+      if (event == ev_PREHEAT_HIGH)
+      {
+        /*Transition actions*/
+        psm->current_state = st_PREHEATING;
+      }
+      else if ( event == ev_SEALING_HIGH)
+      {
+        /*Transition actions*/
+        psm->current_state = st_RAISETEMP;
+      }
+      else if ( event == ev_RESET)
+      {
+        if (EnableIO == 1)
+        {
+          /*Transition actions*/
+          psm->current_state = st_ON;
+        }
+        else
+        {
+          /*Transition actions*/
+          psm->current_state = st_OFF;
+        }
+      }
+      break;
+
+    case st_PREHEATING:
+      /* State Actions*/
+      if (event == ev_PREHEAT_LOW)
+      {
+        /*Transition actions*/
+        psm->current_state = st_CYCLESTART;
+      }
+      else if (event == ev_SEALING_HIGH)
+      {
+        /*Transition actions*/
+        psm->current_state = st_RAISETEMP;
+      }
+      else if ( event == ev_RESET)
+      {
+        if (EnableIO == 1)
+        {
+          /*Transition actions*/
+          psm->current_state = st_ON;
+        }
+        else
+        {
+          /*Transition actions*/
+          psm->current_state = st_OFF;
+        }
+      }
+      break;
+
+    case st_RAISETEMP:
+      /* State Actions*/
+      if (event == ev_TEMPSET)
+      {
+        /*Transition actions*/
+        psm->current_state = st_SEAL;
+      }
+      else if ( event == ev_RESET)
+      {
+        if (EnableIO == 1)
+        {
+          /*Transition actions*/
+          psm->current_state = st_ON;
+        }
+        else
+        {
+          /*Transition actions*/
+          psm->current_state = st_OFF;
+        }
+      }
+      break;
+
+    case st_SEAL:
+      /* State Actions*/
+      if (event == ev_SEALING_LOW)
+      {
+        /*Transition actions*/
+        psm->current_state = st_CYCLESTART;
+      }
+      else if ( event == ev_RESET)
+      {
+        if (EnableIO == 1)
+        {
+          /*Transition actions*/
+          psm->current_state = st_ON;
+        }
+        else
+        {
+          /*Transition actions*/
+          psm->current_state = st_OFF;
+        }
+      }
+      break;
+    case st_ALARM:
+      break;
+    default:
+      break;
+  }
+}
 
 void ENABLE() {
-  if(digitalRead(D0Pin) == 0)
+  if (digitalRead(EnableIO) == 0)
   {
-    state = 0; // Sistema desligado
+    sm_send_event(&SM, ev_ENABLE_LOW);
   }
   else
   {
-    state = 1; // Sistema ligado
+    sm_send_event(&SM, ev_ENABLE_HIGH);
   }
 }
 
 void START() {
-  if(digitalRead(D1Pin) == 0 && state == 2)
+  if (digitalRead(StartIO) == 0)
   {
-    state = 1; // Sistema Ligado
-  }
-  else if( digitalRead(D1Pin) == 1 && state == 1)
-  {
-    state = 2; // Inicio de ciclo
+    sm_send_event(&SM, ev_START_LOW);
   }
   else
   {
-    state = 6; // Alarme
+    sm_send_event(&SM, ev_START_HIGH);
   }
 }
 
 void PREHEAT() {
-  if(digitalRead(D2Pin) == 0 && state == 2)
+  if (digitalRead(PreheatIO) == 0)
   {
-    state = 2; // Inicio de ciclo
-  }
-  else if( digitalRead(D2Pin) == 1 && state == 2)
-  {
-    state = 3; // Pre-heat
+    sm_send_event(&SM, ev_PREHEAT_LOW);
   }
   else
   {
-    state = 6; // Alarme
+    sm_send_event(&SM, ev_PREHEAT_HIGH);
   }
 }
 
 void SEALING() {
-  if(digitalRead(D3Pin) == 0 && state == 2)
+  if (digitalRead(SealingIO) == 0)
   {
-    state = 2; // Inicio de ciclo
-  }
-  else if( digitalRead(D3Pin) == 1 && ( state == 2 || state ==3))
-  {
-    state = 4; // Aumentar Temp
-  }
-  else if( digitalRead(D3Pin) == 0 && state == 5)
-  {
-    state = 2; // Inicio de ciclo
+    sm_send_event(&SM, ev_SEALING_LOW);
   }
   else
   {
-    state = 6; // Alarme
+    sm_send_event(&SM, ev_SEALING_HIGH);
   }
 }
 
 void RESET() {
-  if(digitalRead(D4Pin == 1))
+  if (digitalRead(ResetIO == 1))
   {
-    state = 0;  
+    sm_send_event(&SM, ev_RESET);
   }
 }
 
-elapsedMicros timer;
-volatile bool periodflag=false;
-void ZEROPASS() {
-  if(digitalRead(D3Pin) == 1 && periodflag == false)
+void ZEROCROSS() {
+  if (digitalRead(Zerocross) == 1 && periodflag == false)
   {
-    period=timer;
-    timer = 0;
-    periodflag=true;
-    
+    MainsPeriod = ZeroCrossTimer;
+    ZeroCrossTimer = 0;
+    periodflag = true;
+
   }
-  else if( digitalRead(D3Pin) == 1 && periodflag == true)
+  else if ( digitalRead(Zerocross) == 1 && periodflag == true)
   {
-    periodflag=false;
+    periodflag = false;
   }
-}
-
-void turnOff()
-{
-}
-
-void turnOn()
-{
-}
-
-void standby()
-{
-}
-
-void preheat()
-{
-  
 }
 
 void setTemp()
 {
-  uint16_t new_dc=dc;
-  int16_t temp_error=temp-setpoint;
-  integral+=temp_error;
-  if (integral > integralClamp) integral = integralClamp; // Positive clamping to avoid wind-up
-  if (integral < -integralClamp) integral = -integralClamp; // Negative clamping to avoid wind-up
+  uint16_t new_dc = duty_cycle;
+  int16_t temp_error = temperature - setpoint;
+  integral += temp_error;
+  if (integral > INTEGRAL_CLAMP) integral = INTEGRAL_CLAMP; // Positive clamping to avoid wind-up
+  if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP; // Negative clamping to avoid wind-up
 
-  
-  new_dc+=(PID_Kp*temp_error)+(PID_Ki*integral); // Falta a componente derivativa
+
+  new_dc += (PID_KP * temp_error) + (PID_KI * integral); // Falta a componente derivativa
 
   if (new_dc > 4095) {
     new_dc = 4095;
@@ -166,22 +302,18 @@ void setTemp()
   } else {
     new_dc = new_dc;
   }
-  analogWrite(D6Pin, new_dc); // Sinal de controlo do controlador
-}
-
-void alarme()
-{
+  analogWrite(PWMout, new_dc); // Sinal de controlo do controlador
 }
 
 void sampleCurrent()
 {
-  float sample=0;
+  float sample = 0;
   sample = analogRead(A1Pin);
-  sample = sample*3300/4095; 
-  sample = sample-1650;
-  sample = sample/current_K1;
-  sample = sample*current_K2/1000;
-  current=sample;
+  sample = sample * 3300 / 4095;
+  sample = sample - 1650;
+  sample = sample / CURRENT_K1;
+  sample = sample * CURRENT_K2 / 1000;
+  current = sample;
   Serial.print("Corrente: ");
   Serial.print(sample);
   Serial.println(" Ap");
@@ -189,85 +321,112 @@ void sampleCurrent()
 
 void sampleVoltage()
 {
-  float sample=0;
+  float sample = 0;
   sample = analogRead(A2Pin);
-  sample = sample*3300/4095;
-  sample = sample-1650;
-  sample = sample*voltage_K1/1000;
+  sample = sample * 3300 / 4095;
+  sample = sample - 1650;
+  sample = sample * VOLTAGE_K1 / 1000;
   Serial.print("Tensao: ");
   Serial.print(sample);
   Serial.println(" Vp");
-  voltage=sample;
+  voltage = sample;
 }
 
 void calcTemp()
 {
+  resistance = voltageRMS / currentRMS;
+  temperature = (resistance - R_ZERO) / (TEMP_COEF * R_ZERO);
+  Serial.print("Resistencia: ");
+  Serial.print(resistance);
+  Serial.println(" Ohm");
+  Serial.print("Temperatura: ");
+  Serial.print(temperature);
+  Serial.println(" C");
 }
 
-
 void setup() {
-  Serial.begin(baudrate);
-  analogReadRes(12); //12 bit ADC
+  //Uart settings
+  /*
+       Data bits - 8
+       Parity    - None
+       Stop bits - 1
+  */
+  Serial.begin(BAUDRATE);
 
-  // put your setup code here, to run once:
-  attachInterrupt(digitalPinToInterrupt(D0Pin), ENABLE, CHANGE); // Enable
-  attachInterrupt(digitalPinToInterrupt(D1Pin), START, CHANGE); // Start 
-  attachInterrupt(digitalPinToInterrupt(D2Pin), PREHEAT, CHANGE); // Pre-heat
-  attachInterrupt(digitalPinToInterrupt(D3Pin), SEALING, CHANGE); // Sealing
-  attachInterrupt(digitalPinToInterrupt(D4Pin), RESET, RISING); // Reset
-  attachInterrupt(digitalPinToInterrupt(D8Pin), ZEROPASS, RISING); // Passagem por zero
+  //Analog Pins
+  analogReadRes(12); //12 bit ADC
   pinMode(A0Pin, INPUT); // Pot
   pinMode(A1Pin, INPUT); // Current sensor
   pinMode(A2Pin, INPUT); // Voltage sensor
-  pinMode(D0Pin, INPUT); // Enable
-  pinMode(D1Pin, INPUT); // Start 
-  pinMode(D2Pin, INPUT); // Pre-heat
-  pinMode(D3Pin, INPUT); // Sealing
-  pinMode(D4Pin, INPUT); // Reset 
-  pinMode(D5Pin, OUTPUT); // Alarm
-  pinMode(D6Pin, OUTPUT); // PWM output for controller
-  pinMode(D7Pin, OUTPUT); // Controller On/Off
-  pinMode(D8Pin, INPUT); // Passagem por zero
-  digitalWrite(D5Pin, LOW);
-  digitalWrite(D6Pin, LOW);
-  digitalWrite(D7Pin, LOW);
-  analogWriteResolution(12); // 2-15bits | A 12 bits, a frequencia e 36621.09 Hz (teensy 4.1 doc)
-  analogWrite(D6Pin, 0); // Sinal de controlo do controlador
+
+  //Interrupts
+  attachInterrupt(digitalPinToInterrupt(Zerocross), ZEROCROSS, RISING);
+
+  //Digital Pins
+  pinMode(EnableIO, INPUT); // EnableIO
+  pinMode(StartIO, INPUT); // StartIO
+  pinMode(PreheatIO, INPUT); // Pre-heat
+  pinMode(SealingIO, INPUT); // SealingIO
+  pinMode(ResetIO, INPUT); // ResetIO
+  pinMode(AlarmIO, OUTPUT); // Alarm
+  pinMode(PWMout, OUTPUT); // PWM output for controller
+  pinMode(con_OnOff, OUTPUT); // Controller On/Off
+  pinMode(Zerocross, INPUT); // Passagem por zero
+
+  //Initialize digital outputs
+  digitalWrite(AlarmIO, LOW);
+  digitalWrite(PWMout, LOW);
+  digitalWrite(con_OnOff, LOW);
+  //PWM initialization
+  analogWriteResolution(12); // With 12 bits, the frequency is 36621.09 Hz (teensy 4.1 doc)
+  analogWrite(PWMout, 0); // Power controller control signal
+
+  //Initialize state machine
+  sm_init(&SM, st_OFF);
 }
 
-elapsedMillis timer1;
 void loop() {
   // put your main code here, to run repeatedly:
-  //noInterrupts();
-  switch(state)
+
+  // Polling
+  if (PollingTimer >= POLLING_PERIOD)
   {
-    case 0:
-      turnOff();
-      break;
-    case 1:
-      turnOn();
-      break;
-    case 2:
-      standby();
-      break;
-    case 3:
-      preheat();
-      break;
-    case 4:
-      setTemp();
-      break;
-    case 5:
-      // acender led para mostrar que se atingiu a temp. pretendida e que está a selar
-      break;
-    default:
-      alarme();
-      break;
+    if (digitalRead(ResetIO) != ResetIO_old)
+    {
+      ResetIO_old = digitalRead(ResetIO);
+      RESET();
+    }
+    if (digitalRead(EnableIO) != EnableIO_old)
+    {
+      EnableIO_old = digitalRead(EnableIO);
+      ENABLE();
+    }
+
+    if (digitalRead(StartIO) != StartIO_old)
+    {
+      StartIO_old = digitalRead(StartIO);
+      START();
+    }
+
+    if (digitalRead(PreheatIO) != PreheatIO_old)
+    {
+      PreheatIO_old = digitalRead(PreheatIO);
+      PREHEAT();
+    }
+
+    if (digitalRead(SealingIO) != SealingIO_old)
+    {
+      SealingIO_old = digitalRead(SealingIO);
+      SEALING();
+    }
+    PollingTimer = 0;
   }
-  while(timer1<=200);
-  Serial.print("\n\x1b[2J\r"); //Clear screen
-  sampleCurrent();
-  sampleVoltage();
-  calcTemp();
-  timer1=0;
-  
+
+  /*
+    while(timer1<=200);
+    Serial.print("\n\x1b[2J\r"); //Clear screen
+    sampleCurrent();
+    sampleVoltage();
+    calcTemp();
+    timer1=0;*/
 }
