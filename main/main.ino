@@ -391,7 +391,7 @@ void loop() {
   // Polling
   if (PollingTimer >= POLLING_PERIOD)
   {
-    if (digitalRead(ResetIO) != ResetIO_old)
+    if (digitalRead(ResetIO) == 1 && ResetIO_old == 0)
     {
       ResetIO_old = digitalRead(ResetIO);
       RESET();
