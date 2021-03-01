@@ -15,7 +15,7 @@
     -Organizar o funcionamento do loop
     -Device driver - Ethernet
     -Device driver - Display
-*/
+*/ 
 
 #include "statemachine.h"
 #include "statemachine.c"
