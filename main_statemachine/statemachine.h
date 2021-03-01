@@ -19,7 +19,7 @@ typedef enum{
   st_ALARM
 }sm_state_t;
 
-//#define sm_state_t int
+#define sm_state_t int
 
 // State machine events
 typedef enum{
@@ -45,8 +45,6 @@ typedef struct sm_t
   sm_event_t last_event;
 }sm_t;
 
-extern sm_state_t State;
-extern sm_event_t Event;
 extern sm_t SM;
 
 /********************************************************************

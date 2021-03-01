@@ -7,8 +7,6 @@
 
 #include "statemachine.h"
 
-
-
 void sm_init(sm_t *psm, sm_state_t initial_state)
 {
   psm->current_state=initial_state;
