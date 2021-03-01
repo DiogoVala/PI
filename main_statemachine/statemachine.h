@@ -1,17 +1,15 @@
 /* 
- * File:   sm_t.h
+ * File:   statemachine.h
  * Author: Diogo Vala & Diogo Fernandes
  *
  * Overview: Define state machine 
  */
- 
-#pragma once
 
-#include <stdint.h>
+#ifndef STATEMACHINE_H
+#define STATEMACHINE_H
 
-//State machine definition
-typedef enum sm_state_t
-{
+//State machine states
+typedef enum{
   st_OFF,
   st_ON,
   st_CYCLESTART_ISR,
@@ -19,11 +17,12 @@ typedef enum sm_state_t
   st_RAISETEMP,
   st_SEAL,
   st_ALARM
-} sm_state_t;
+}sm_state_t;
+
+//#define sm_state_t int
 
 // State machine events
-typedef enum sm_event_t
-{
+typedef enum{
   ev_NULL,
   ev_ENABLE_ISR_HIGH,
   ev_ENABLE_ISR_LOW,
@@ -36,17 +35,19 @@ typedef enum sm_event_t
   ev_TEMPSET,
   ev_RESET_ISR,
   ev_ALARM
+}sm_event_t;
 
-} sm_event_t;
-
-#define sm_state_t int
-
+//State machine definition
 typedef struct sm_t
 {
   sm_state_t current_state;
   sm_state_t initial_state;
   sm_event_t last_event;
-} sm_t;
+}sm_t;
+
+extern sm_state_t State;
+extern sm_event_t Event;
+extern sm_t SM;
 
 /********************************************************************
  * Function:    sm_init()
@@ -110,3 +111,5 @@ sm_state_t sm_get_current_state(sm_t *psm);
  * 
  ********************************************************************/
 void sm_execute(sm_t *psm);
+
+#endif

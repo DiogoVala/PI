@@ -1,15 +1,22 @@
-#include "sm_t.h"
-#include "sm_t.c" // Error if i don't include the .c file as well
+/* 
+ * File:   main.ino
+ * Author: Diogo Vala & Diogo Fernandes
+ *
+ * Overview: Termorregulador Digital 
+ */
+
+
+#include "statemachine.h"
 
 #define A0Pin 14 // Analog input 0 - Pot
 #define A1Pin 15 // Analog input 1 - Current
 #define A2Pin 16 // Analog input 2 - Voltage
 
-#define EnableIO 2 // Digital 0 - EnableIO
-#define StartIO 3 // Digital 1 - StartIO 
+#define EnableIO 2 // Digital 0 - Enable
+#define StartIO 3 // Digital 1 - Start
 #define PreheatIO 4 // Digital 2 - Pre-heat
-#define SealingIO 5 // Digital 3 - SealingIO
-#define ResetIO 6 // Digital 4 - ResetIO 
+#define SealingIO 5 // Digital 3 - Sealing
+#define ResetIO 6 // Digital 4 - Reset
 #define AlarmIO 7 // Digital 5 - Alarm
 
 #define PWMout 8 // Digital 6 - PWM output for controller
@@ -22,25 +29,38 @@ static uint16_t baudrate = 9600;
 static double current_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
 static uint16_t current_K2 = 1000; // Constante de conversão do transformador de corrente
 static double voltage_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
+static double temp_coef=0.00385; //Example of temperature coefficient
+static double R0=1; //Resistance of heatband at 0ºC
+volatile double current=0; //
+volatile double voltage=0; //
+volatile double currentRMS=0; //
+volatile double voltageRMS=0; //
+volatile double resistance=0; //
 //Controlo
+volatile double setpoint=0; // 0 to ~400º
+volatile uint16_t temp_preheat=0;  // 0 to ~400º
+volatile double temperature=0; // 0 to ~400º
 static uint16_t PID_Kp = 1;
 static uint16_t PID_Ki = 1;
 //static uint16_t PID_Kd = 1;
 static uint16_t integralClamp = 100;
-
-//Logica
-volatile uint16_t setpoint=0; // 0 to ~400º
-volatile uint16_t temp_preheat=0;  // 0 to ~400º
-volatile uint16_t temp=0; // 0 to ~400º
-volatile uint16_t period=0; //0 to ~21000
-volatile uint16_t duty=0; // 0 to 4095
-//Sensores
-volatile double current=0;
-volatile double voltage=0;
-//Controlo
 volatile int64_t integral = 0;
 volatile int64_t derivative = 0;
-volatile uint16_t dc=0;
+volatile uint16_t duty_cycle=0; // 0 to 4095 
+//Inputs
+volatile uint8_t EnableIO_old;
+volatile uint8_t StartIO_old;
+volatile uint8_t PreheatIO_old;
+volatile uint8_t SealingIO_old;
+volatile uint8_t ResetIO_old;
+//Timing
+elapsedMillis PollingTimer;
+elapsedMillis SampleTimer;
+elapsedMicros ZeroCrossTimer;
+static uint8_t PollingPeriod = 10; // Period in ms
+static uint8_t SamplePeriod = 10; // Period in ms
+volatile bool periodflag=false;
+volatile uint16_t period=0; //0 to ~21000
 
 sm_t SM;
 
@@ -58,7 +78,8 @@ void sm_execute(sm_t *psm)
   {
     case st_OFF:
       /* State Actions*/
-      if(event == ev_ENABLE_ISR_HIGH)
+      //if(event == ev_ENABLE_HIGH) Não funciona: 'ev_ENABLE_HIGH' was not declared in this scope
+      if(event == (sm_event_t)0)
       {
         /*Transition actions*/
         psm->current_state=st_ON;
@@ -67,31 +88,31 @@ void sm_execute(sm_t *psm)
 
     case st_ON:
       /* State Actions*/
-      if(event == ev_ENABLE_ISR_LOW)
+      if(event == ev_ENABLE_LOW)
       {
         /*Transition actions*/
         psm->current_state=st_OFF;
       }
-      else if( event == ev_START_ISR_HIGH)
+      else if( event == ev_START_HIGH)
       {
         /*Transition actions*/
-        psm->current_state=st_CYCLESTART_ISR;
+        psm->current_state=st_CYCLESTART;
       }
       break;
     
-    case st_CYCLESTART_ISR:
+    case st_CYCLESTART:
       /* State Actions*/
-      if(event == ev_PREHEAT_ISR_HIGH)
+      if(event == ev_PREHEAT_HIGH)
       {
         /*Transition actions*/
-        psm->current_state=st_PREHEAT_ISRING;
+        psm->current_state=st_PREHEATING;
       }
-      else if( event == ev_SEALING_ISR_HIGH)
+      else if( event == ev_SEALING_HIGH)
       {
         /*Transition actions*/
         psm->current_state=st_RAISETEMP;
       }
-      else if( event == ev_RESET_ISR)
+      else if( event == ev_RESET)
       {
         if(EnableIO == 1)
         {
@@ -106,19 +127,19 @@ void sm_execute(sm_t *psm)
       }
       break;
       
-    case st_PREHEAT_ISRING:
+    case st_PREHEATING:
       /* State Actions*/
-      if(event == ev_PREHEAT_ISR_LOW)
+      if(event == ev_PREHEAT_LOW)
       {
         /*Transition actions*/
-        psm->current_state=st_CYCLESTART_ISR;
+        psm->current_state=st_CYCLESTART;
       }
-      else if(event == ev_SEALING_ISR_HIGH)
+      else if(event == ev_SEALING_HIGH)
       {
         /*Transition actions*/
         psm->current_state=st_RAISETEMP;
       }
-      else if( event == ev_RESET_ISR)
+      else if( event == ev_RESET)
       {
         if(EnableIO == 1)
         {
@@ -140,7 +161,7 @@ void sm_execute(sm_t *psm)
         /*Transition actions*/
         psm->current_state=st_SEAL;
       }
-      else if( event == ev_RESET_ISR)
+      else if( event == ev_RESET)
       {
         if(EnableIO == 1)
         {
@@ -157,12 +178,12 @@ void sm_execute(sm_t *psm)
     
     case st_SEAL:
       /* State Actions*/
-      if(event == ev_SEALING_ISR_LOW)
+      if(event == ev_SEALING_LOW)
       {
         /*Transition actions*/
-        psm->current_state=st_CYCLESTART_ISR;
+        psm->current_state=st_CYCLESTART;
       }
-      else if( event == ev_RESET_ISR)
+      else if( event == ev_RESET)
       {
         if(EnableIO == 1)
         {
@@ -183,64 +204,62 @@ void sm_execute(sm_t *psm)
   }
 }
 
-void ENABLE_ISR() {
+void ENABLE() {
   if(digitalRead(EnableIO) == 0)
   {
-    sm_send_event(&SM, ev_ENABLE_ISR_LOW);
+    sm_send_event(&SM, ev_ENABLE_LOW);
   }
   else
   {
-    sm_send_event(&SM, ev_ENABLE_ISR_HIGH);
+    sm_send_event(&SM, ev_ENABLE_HIGH);
   }
 }
 
-void START_ISR() {
+void START() {
   if(digitalRead(StartIO) == 0)
   {
-    sm_send_event(&SM, ev_START_ISR_LOW);
+    sm_send_event(&SM, ev_START_LOW);
   }
   else
   {
-    sm_send_event(&SM, ev_START_ISR_HIGH);
+    sm_send_event(&SM, ev_START_HIGH);
   }
 }
 
-void PREHEAT_ISR() {
+void PREHEAT() {
   if(digitalRead(PreheatIO) == 0)
   {
-    sm_send_event(&SM, ev_PREHEAT_ISR_LOW);
+    sm_send_event(&SM, ev_PREHEAT_LOW);
   }
   else
   {
-    sm_send_event(&SM, ev_PREHEAT_ISR_HIGH);
+    sm_send_event(&SM, ev_PREHEAT_HIGH);
   }
 }
 
-void SEALING_ISR() {
+void SEALING() {
   if(digitalRead(SealingIO) == 0)
   {
-    sm_send_event(&SM, ev_SEALING_ISR_LOW);
+    sm_send_event(&SM, ev_SEALING_LOW);
   }
   else
   {
-    sm_send_event(&SM, ev_SEALING_ISR_HIGH);
+    sm_send_event(&SM, ev_SEALING_HIGH);
   }
 }
 
-void RESET_ISR() {
+void RESET() {
   if(digitalRead(ResetIO == 1))
   {
-    sm_send_event(&SM, ev_RESET_ISR); 
+    sm_send_event(&SM, ev_RESET); 
   }
 }
 
-elapsedMicros timer;
-volatile bool periodflag=false;
-void ZEROPASS_ISR() {
+void ZEROPASS() {
   if(digitalRead(SealingIO) == 1 && periodflag == false)
   {
-    period=timer;
-    timer = 0;
+    period=ZeroCrossTimer;
+    ZeroCrossTimer = 0;
     periodflag=true;
     
   }
@@ -252,8 +271,8 @@ void ZEROPASS_ISR() {
 
 void setTemp()
 {
-  uint16_t new_dc=dc;
-  int16_t temp_error=temp-setpoint;
+  uint16_t new_dc=duty_cycle;
+  int16_t temp_error=temperature-setpoint;
   integral+=temp_error;
   if (integral > integralClamp) integral = integralClamp; // Positive clamping to avoid wind-up
   if (integral < -integralClamp) integral = -integralClamp; // Negative clamping to avoid wind-up
@@ -300,6 +319,14 @@ void sampleVoltage()
 
 void calcTemp()
 {
+  resistance=voltageRMS/currentRMS;
+  temperature=(resistance-R0)/(temp_coef*R0);
+  Serial.print("Resistencia: ");
+  Serial.print(resistance);
+  Serial.println(" Ohm");
+  Serial.print("Temperatura: ");
+  Serial.print(temperature);
+  Serial.println(" C");
 }
 
 void setup() {
@@ -312,12 +339,12 @@ void setup() {
   Serial.begin(baudrate);
   
   //Attach Interrupts
-  attachInterrupt(digitalPinToInterrupt(EnableIO), ENABLE_ISR, CHANGE); // EnableIO
-  attachInterrupt(digitalPinToInterrupt(StartIO), START_ISR, CHANGE); // StartIO 
-  attachInterrupt(digitalPinToInterrupt(PreheatIO), PREHEAT_ISR, CHANGE); // Pre-heat
-  attachInterrupt(digitalPinToInterrupt(SealingIO), SEALING_ISR, CHANGE); // SealingIO
-  attachInterrupt(digitalPinToInterrupt(ResetIO), RESET_ISR, RISING); // ResetIO
-  attachInterrupt(digitalPinToInterrupt(Zeropass), ZEROPASS_ISR, RISING); // Passagem por zero
+  attachInterrupt(digitalPinToInterrupt(EnableIO), ENABLE, CHANGE); // EnableIO
+  attachInterrupt(digitalPinToInterrupt(StartIO), START, CHANGE); // StartIO 
+  attachInterrupt(digitalPinToInterrupt(PreheatIO), PREHEAT, CHANGE); // Pre-heat
+  attachInterrupt(digitalPinToInterrupt(SealingIO), SEALING, CHANGE); // SealingIO
+  attachInterrupt(digitalPinToInterrupt(ResetIO), RESET, RISING); // ResetIO
+  attachInterrupt(digitalPinToInterrupt(Zeropass), ZEROPASS, RISING); // Passagem por zero
   
   //Analog Pins
   analogReadRes(12); //12 bit ADC
@@ -348,13 +375,48 @@ void setup() {
   sm_init(&SM, st_OFF);
 }
 
-elapsedMillis timer1;
 void loop() {
   // put your main code here, to run repeatedly:
+
+  if(PollingTimer>=PollingPeriod)
+  {
+    
+    if(digitalRead(EnableIO)!=EnableIO_old)
+    {
+      EnableIO_old=digitalRead(EnableIO);
+      ENABLE();
+    }
+    
+    if(digitalRead(StartIO)!=StartIO_old)
+    {
+      StartIO_old=digitalRead(StartIO);
+      START();
+    }
+    
+    if(digitalRead(PreheatIO)!=PreheatIO_old)
+    {
+      PreheatIO_old=digitalRead(PreheatIO);
+      PREHEAT();
+    }
+
+    if(digitalRead(SealingIO)!=SealingIO_old)
+    {
+      SealingIO_old=digitalRead(SealingIO);
+      SEALING();
+    }
+    
+    if(digitalRead(ResetIO)!=ResetIO_old)
+    {
+      ResetIO_old=digitalRead(ResetIO);
+      RESET();
+    }
+    PollingTimer=0;
+  }
+/*
   while(timer1<=200);
   Serial.print("\n\x1b[2J\r"); //Clear screen
   sampleCurrent();
   sampleVoltage();
   calcTemp();
-  timer1=0;
+  timer1=0;*/
 }
