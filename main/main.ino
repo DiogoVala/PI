@@ -15,7 +15,7 @@
     -Organizar o funcionamento do loop
     -Device driver - Ethernet
     -Device driver - Display
-*/ 
+*/
 
 #include "statemachine.h"
 #include "statemachine.c"
@@ -73,10 +73,14 @@ volatile uint8_t ResetIO_old;
 elapsedMillis PollingTimer;
 elapsedMillis SampleTimer;
 elapsedMicros ZeroCrossTimer;
-static uint8_t POLLING_PERIOD = 10; // Period in ms
-static uint8_t SAMPLING_PERIOD = 10; // Period in ms
+static uint8_t POLLING_PERIOD = 100; // Period in ms
+static uint8_t SAMPLING_PERIOD = 100; // Period in ms
 volatile bool periodflag = false; // Flag used to measure period between every other zero crossing
 volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period of mains to be used for True RMS
+
+//Data
+volatile int32_t t_data[10000];
+volatile int8_t v_data[10000];
 
 sm_t SM;
 
@@ -90,12 +94,13 @@ void sm_execute(sm_t *psm)
   */
   sm_event_t event = psm->last_event;
 
-  switch ((sm_state_t)event)
+  switch (sm_get_current_state(psm))
   {
     case st_OFF:
       /* State Actions*/
       if (event == ev_ENABLE_HIGH)
       {
+        Serial.print("\rState: ON\n");
         /*Transition actions*/
         psm->current_state = st_ON;
       }
@@ -106,25 +111,35 @@ void sm_execute(sm_t *psm)
       if (event == ev_ENABLE_LOW)
       {
         /*Transition actions*/
+        Serial.print("\rState: OFF\n");
         psm->current_state = st_OFF;
       }
       else if ( event == ev_START_HIGH)
       {
         /*Transition actions*/
+        Serial.print("\rState: CYCLESTART\n");
         psm->current_state = st_CYCLESTART;
       }
       break;
 
     case st_CYCLESTART:
       /* State Actions*/
-      if (event == ev_PREHEAT_HIGH)
+      if (event == ev_START_LOW)
       {
         /*Transition actions*/
+        Serial.print("\rState: ON\n");
+        psm->current_state = st_ON;
+      }
+      else if (event == ev_PREHEAT_HIGH)
+      {
+        /*Transition actions*/
+        Serial.print("\rState: PREHEAT\n");
         psm->current_state = st_PREHEATING;
       }
       else if ( event == ev_SEALING_HIGH)
       {
         /*Transition actions*/
+        Serial.print("\rState: RAISETEMP\n");
         psm->current_state = st_RAISETEMP;
       }
       else if ( event == ev_RESET)
@@ -132,11 +147,13 @@ void sm_execute(sm_t *psm)
         if (EnableIO == 1)
         {
           /*Transition actions*/
+          Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
         }
         else
         {
           /*Transition actions*/
+          Serial.print("\rState: OFF\n");
           psm->current_state = st_OFF;
         }
       }
@@ -147,11 +164,13 @@ void sm_execute(sm_t *psm)
       if (event == ev_PREHEAT_LOW)
       {
         /*Transition actions*/
+        Serial.print("\rState: CYCLESTART\n");
         psm->current_state = st_CYCLESTART;
       }
       else if (event == ev_SEALING_HIGH)
       {
         /*Transition actions*/
+        Serial.print("\rState: RAISETEMP\n");
         psm->current_state = st_RAISETEMP;
       }
       else if ( event == ev_RESET)
@@ -159,11 +178,13 @@ void sm_execute(sm_t *psm)
         if (EnableIO == 1)
         {
           /*Transition actions*/
+          Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
         }
         else
         {
           /*Transition actions*/
+          Serial.print("\rState: OFF\n");
           psm->current_state = st_OFF;
         }
       }
@@ -174,6 +195,7 @@ void sm_execute(sm_t *psm)
       if (event == ev_TEMPSET)
       {
         /*Transition actions*/
+        Serial.print("\rState: SEAL\n");
         psm->current_state = st_SEAL;
       }
       else if ( event == ev_RESET)
@@ -181,11 +203,13 @@ void sm_execute(sm_t *psm)
         if (EnableIO == 1)
         {
           /*Transition actions*/
+          Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
         }
         else
         {
           /*Transition actions*/
+          Serial.print("\rState: OFF\n");
           psm->current_state = st_OFF;
         }
       }
@@ -196,18 +220,19 @@ void sm_execute(sm_t *psm)
       if (event == ev_SEALING_LOW)
       {
         /*Transition actions*/
+        Serial.print("\rState: CYCLESTART\n");
         psm->current_state = st_CYCLESTART;
       }
       else if ( event == ev_RESET)
       {
         if (EnableIO == 1)
         {
-          /*Transition actions*/
+          Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
         }
         else
         {
-          /*Transition actions*/
+          Serial.print("\rState: OFF\n");
           psm->current_state = st_OFF;
         }
       }
@@ -218,6 +243,10 @@ void sm_execute(sm_t *psm)
       break;
   }
 }
+
+/*
+  Maquina de estados assíncrona: fazer excecute() a cada novo evento?
+*/
 
 void ENABLE() {
   if (digitalRead(EnableIO) == 0)
@@ -292,7 +321,6 @@ void setTemp()
   if (integral > INTEGRAL_CLAMP) integral = INTEGRAL_CLAMP; // Positive clamping to avoid wind-up
   if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP; // Negative clamping to avoid wind-up
 
-
   new_dc += (PID_KP * temp_error) + (PID_KI * integral); // Falta a componente derivativa
 
   if (new_dc > 4095) {
@@ -302,6 +330,7 @@ void setTemp()
   } else {
     new_dc = new_dc;
   }
+  duty_cycle = new_dc;
   analogWrite(PWMout, new_dc); // Sinal de controlo do controlador
 }
 
@@ -314,7 +343,7 @@ void sampleCurrent()
   sample = sample / CURRENT_K1;
   sample = sample * CURRENT_K2 / 1000;
   current = sample;
-  Serial.print("Corrente: ");
+  Serial.print("\rCorrente: ");
   Serial.print(sample);
   Serial.println(" Ap");
 }
@@ -326,7 +355,7 @@ void sampleVoltage()
   sample = sample * 3300 / 4095;
   sample = sample - 1650;
   sample = sample * VOLTAGE_K1 / 1000;
-  Serial.print("Tensao: ");
+  Serial.print("\rTensao: ");
   Serial.print(sample);
   Serial.println(" Vp");
   voltage = sample;
@@ -334,12 +363,12 @@ void sampleVoltage()
 
 void calcTemp()
 {
-  resistance = voltageRMS / currentRMS;
+  resistance = voltage / current;
   temperature = (resistance - R_ZERO) / (TEMP_COEF * R_ZERO);
-  Serial.print("Resistencia: ");
+  Serial.print("\rResistencia: ");
   Serial.print(resistance);
   Serial.println(" Ohm");
-  Serial.print("Temperatura: ");
+  Serial.print("\rTemperatura: ");
   Serial.print(temperature);
   Serial.println(" C");
 }
@@ -384,10 +413,11 @@ void setup() {
   //Initialize state machine
   sm_init(&SM, st_OFF);
 }
+volatile int i = 1;
 
 void loop() {
   // put your main code here, to run repeatedly:
-
+  
   // Polling
   if (PollingTimer >= POLLING_PERIOD)
   {
@@ -421,12 +451,81 @@ void loop() {
     }
     PollingTimer = 0;
   }
+  
+   // Keyboard Simulation to test state machine
+  uint8_t incomingByte=0;
+  if (Serial.available() > 0) {
+    incomingByte = Serial.read(); // Byte is received in DECIMAL format
+    //Serial.print(incomingByte); 
+    switch(incomingByte){
+      case 113: //q
+        sm_send_event(&SM, ev_ENABLE_HIGH);
+        sm_execute(&SM);
+        break;
+      case 97: //a
+        sm_send_event(&SM, ev_ENABLE_LOW);
+        sm_execute(&SM);
+        break;
+      case 119://w
+        sm_send_event(&SM, ev_START_HIGH);
+        sm_execute(&SM);
+        break;
+      case 115://s
+        sm_send_event(&SM, ev_START_LOW);
+        sm_execute(&SM);
+        break;
+      case 101://e
+        sm_send_event(&SM, ev_PREHEAT_HIGH);
+        sm_execute(&SM);
+        break;
+      case 100://d
+        sm_send_event(&SM, ev_PREHEAT_LOW);
+        sm_execute(&SM);
+       break;
+      case 114://r
+        sm_send_event(&SM, ev_SEALING_HIGH);
+        sm_execute(&SM);
+       break;
+      case 102://f
+        sm_send_event(&SM, ev_SEALING_LOW);
+        sm_execute(&SM);
+        break;
+      case 116://t
+        sm_send_event(&SM, ev_TEMPSET);
+        sm_execute(&SM);
+      default:
+        break;
+    }
+  }
 
-  /*
-    while(timer1<=200);
+  //Random tests
+  /*if (SampleTimer >= SAMPLING_PERIOD)
+  {
     Serial.print("\n\x1b[2J\r"); //Clear screen
     sampleCurrent();
     sampleVoltage();
     calcTemp();
-    timer1=0;*/
+    t_data[i] = t_data[i-1]+SampleTimer/1000;
+    v_data[i] = voltage;
+    i++;
+    SampleTimer = 0;
+  }*/
+  /*
+  if (i == 20)
+  {
+    Serial.print("\n\x1b[2J\r"); //Clear screen
+    Serial.print("Tempo (ms): ");
+    for (int j = 0; j < 20; j++) {
+      Serial.print("  |  ");
+      Serial.print(t_data[j]);
+    }
+    Serial.println();
+    Serial.print("Tensao (V): ");
+    for (int j = 0; j < 20; j++) {
+      Serial.print("  |  ");
+      Serial.print(v_data[j]);
+
+    delay(10000);
+    i=0;
+  }*/
 }

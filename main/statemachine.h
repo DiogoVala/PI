@@ -105,7 +105,7 @@ sm_state_t sm_get_current_state(sm_t *psm);
 
    Overview:   Manages the state machine
 
-   Note:     Should be manually added in main file
+   Note:       Should be manually added in main file
 
  ********************************************************************/
 void sm_execute(sm_t *psm);
