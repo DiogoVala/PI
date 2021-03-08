@@ -70,10 +70,10 @@ volatile uint8_t SealingIO_old;
 volatile uint8_t ResetIO_old;
 
 //Timing
-elapsedMillis PollingTimer;
+elapsedMicros PollingTimer;
 elapsedMillis SampleTimer;
 elapsedMicros ZeroCrossTimer;
-static uint8_t POLLING_PERIOD = 100; // Period in ms
+static uint8_t POLLING_PERIOD = 1; // Period in us
 static uint8_t SAMPLING_PERIOD = 100; // Period in ms
 volatile bool periodflag = false; // Flag used to measure period between every other zero crossing
 volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period of mains to be used for True RMS
@@ -247,7 +247,6 @@ void sm_execute(sm_t *psm)
 /*
   Maquina de estados assíncrona: fazer excecute() a cada novo evento?
 */
-
 void ENABLE() {
   if (digitalRead(EnableIO) == 0)
   {
@@ -419,7 +418,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   
   // Polling
-  if (PollingTimer >= POLLING_PERIOD)
+  if (PollingTimer >= POLLING_PERIOD) //Talvez seja melhor correr isto à frequência do máxima?
   {
     if (digitalRead(ResetIO) == 1 && ResetIO_old == 0)
     {
