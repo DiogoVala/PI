@@ -20,17 +20,20 @@
 #include "statemachine.h"
 #include "statemachine.c"
 
+/**** Analog Pins ****/
 #define A0Pin 14 // Analog input 0 - Pot
 #define A1Pin 15 // Analog input 1 - Current
 #define A2Pin 16 // Analog input 2 - Voltage
 
+/**** Digital Pins ****/
+//PLC Signals
 #define EnableIO 2 // Digital 0 - Enable
 #define StartIO 3 // Digital 1 - Start
 #define PreheatIO 4 // Digital 2 - Pre-heat
 #define SealingIO 5 // Digital 3 - Sealing
 #define ResetIO 6 // Digital 4 - Reset
 #define AlarmIO 7 // Digital 5 - Alarm
-
+//Control signals
 #define PWMout 8 // Digital 6 - PWM output for controller
 #define con_OnOff 9 // Digital 7 - Controller On/Off
 #define Zerocross 10 // Digital 8 - Passagem por zero
@@ -73,12 +76,14 @@ volatile uint8_t ResetIO_old;
 elapsedMicros PollingTimer;
 elapsedMillis SampleTimer;
 elapsedMicros ZeroCrossTimer;
+elapsedMillis DebounceTimer;
 static uint8_t POLLING_PERIOD = 1; // Period in us
 static uint8_t SAMPLING_PERIOD = 100; // Period in ms
+static uint8_t DEBOUNCE_TIME = 1; // ms
 volatile bool periodflag = false; // Flag used to measure period between every other zero crossing
 volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period of mains to be used for True RMS
 
-//Data
+//Data EXPERIMENTAL
 volatile int32_t t_data[10000];
 volatile int8_t v_data[10000];
 
@@ -144,7 +149,7 @@ void sm_execute(sm_t *psm)
       }
       else if ( event == ev_RESET)
       {
-        if (EnableIO == 1)
+        if (GetPinVal(EnableIO))
         {
           /*Transition actions*/
           Serial.print("\rState: ON\n");
@@ -175,7 +180,7 @@ void sm_execute(sm_t *psm)
       }
       else if ( event == ev_RESET)
       {
-        if (EnableIO == 1)
+        if (GetPinVal(EnableIO))
         {
           /*Transition actions*/
           Serial.print("\rState: ON\n");
@@ -196,11 +201,12 @@ void sm_execute(sm_t *psm)
       {
         /*Transition actions*/
         Serial.print("\rState: SEAL\n");
+
         psm->current_state = st_SEAL;
       }
       else if ( event == ev_RESET)
       {
-        if (EnableIO == 1)
+        if (GetPinVal(EnableIO))
         {
           /*Transition actions*/
           Serial.print("\rState: ON\n");
@@ -225,7 +231,7 @@ void sm_execute(sm_t *psm)
       }
       else if ( event == ev_RESET)
       {
-        if (EnableIO == 1)
+        if (GetPinVal(EnableIO))
         {
           Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
@@ -412,7 +418,17 @@ void setup() {
   //Initialize state machine
   sm_init(&SM, st_OFF);
 }
-volatile int i = 1;
+
+void Debounce(){
+  DebounceTimer=0;
+  while(DebounceTimer<DEBOUNCE_TIME);
+}
+
+bool GetPinVal(uint8_t pin){
+  if(digitalRead(pin)==1)
+    return true;
+  return false;
+}
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -427,6 +443,8 @@ void loop() {
     }
     if (digitalRead(EnableIO) != EnableIO_old)
     {
+      Serial.print("\rEnable\n");
+      Debounce();
       EnableIO_old = digitalRead(EnableIO);
       ENABLE();
     }
@@ -450,63 +468,62 @@ void loop() {
     }
     PollingTimer = 0;
   }
-  
+  sm_execute(&SM);
    // Keyboard Simulation to test state machine
   uint8_t incomingByte=0;
   if (Serial.available() > 0) {
     incomingByte = Serial.read(); // Byte is received in DECIMAL format
     //Serial.print(incomingByte); 
     switch(incomingByte){
-      case 113: //q
+      case 'q':
         sm_send_event(&SM, ev_ENABLE_HIGH);
         sm_execute(&SM);
         break;
-      case 97: //a
+      case 'a':
         sm_send_event(&SM, ev_ENABLE_LOW);
         sm_execute(&SM);
         break;
-      case 119://w
+      case 'w':
         sm_send_event(&SM, ev_START_HIGH);
         sm_execute(&SM);
         break;
-      case 115://s
+      case 's':
         sm_send_event(&SM, ev_START_LOW);
         sm_execute(&SM);
         break;
-      case 101://e
+      case 'e':
         sm_send_event(&SM, ev_PREHEAT_HIGH);
         sm_execute(&SM);
         break;
-      case 100://d
+      case 'd':
         sm_send_event(&SM, ev_PREHEAT_LOW);
         sm_execute(&SM);
        break;
-      case 114://r
+      case 'r':
         sm_send_event(&SM, ev_SEALING_HIGH);
         sm_execute(&SM);
        break;
-      case 102://f
+      case 'f':
         sm_send_event(&SM, ev_SEALING_LOW);
         sm_execute(&SM);
         break;
-      case 116://t
+      case 't':
         sm_send_event(&SM, ev_TEMPSET);
         sm_execute(&SM);
       default:
+        sm_send_event(&SM, ev_RESET);
+        sm_execute(&SM);
         break;
     }
   }
-
+/*
   //Random tests
-  /*if (SampleTimer >= SAMPLING_PERIOD)
+  if (SampleTimer >= SAMPLING_PERIOD)
   {
     Serial.print("\n\x1b[2J\r"); //Clear screen
     sampleCurrent();
     sampleVoltage();
     calcTemp();
-    t_data[i] = t_data[i-1]+SampleTimer/1000;
-    v_data[i] = voltage;
-    i++;
     SampleTimer = 0;
   }*/
   /*
