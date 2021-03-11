@@ -42,21 +42,22 @@
 static uint16_t BAUDRATE = 9600;
 
 //Sensores
-static double CURRENT_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
+static float CURRENT_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
 static uint16_t CURRENT_K2 = 1000; // Constante de conversão do transformador de corrente
-static double VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
-static double TEMP_COEF = 0.00393; // Example of temperature coefficient
-static double R_ZERO = 1; //Resistance of heatband at 0ºC
-volatile double current = 0; // Peak current value
-volatile double voltage = 0; // Peak voltage value
-volatile double currentRMS = 0; // True RMS current
-volatile double voltageRMS = 0; // True RMS voltage
-volatile double resistance = 0; // Vrms/Irms
+static float VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
+static float TEMP_COEF = 0.00393; // Example of temperature coefficient
+static float R_ZERO = 1; //Resistance of heatband at 0ºC
+volatile float current=0; // Storage of current samples
+volatile float voltage=0; // Storage of voltage samples
+volatile uint16_t sample_count=0; //Number of samples taken
+volatile float currentRMS = 0; // True RMS current
+volatile float voltageRMS = 0; // True RMS voltage
+volatile float resistance = 0; // Vrms/Irms
 
 //Controlo
-volatile double setpoint = 0; // 0 to ~400º - Value defined by user
+volatile float setpoint = 0; // 0 to ~400º - Value defined by user
 volatile uint16_t temp_preheat = 0; // 0 to ~400º - Value defined by user
-volatile double temperature = 0; // 0 to ~400º - Calculated value from resitance
+volatile float temperature = 0; // 0 to ~400º - Calculated value from resitance
 static uint16_t PID_KP = 1; // Proportional gain of PID
 static uint16_t PID_KI = 1; // Integral gain of PID
 //static uint16_t PID_KD = 1; // Derivative gain of PID
@@ -73,21 +74,33 @@ volatile uint8_t SealingIO_old;
 volatile uint8_t ResetIO_old;
 
 //Timing
-elapsedMicros PollingTimer;
-elapsedMillis SampleTimer;
-elapsedMicros ZeroCrossTimer;
-elapsedMillis DebounceTimer;
-static uint8_t POLLING_PERIOD = 1; // Period in us
-static uint8_t SAMPLING_PERIOD = 100; // Period in ms
-static uint8_t DEBOUNCE_TIME = 1; // ms
+IntervalTimer MainTimer; // Interrupt timer
+volatile unsigned long PollingTimer=0;
+volatile unsigned long SampleTimer=0;
+volatile unsigned long ZeroCrossTimer=0;
+volatile unsigned long DebounceTimer=0;
+static uint32_t MAIN_TIMER_PERIOD = 1; // Period of timer isr
+static uint32_t POLLING_PERIOD = 10; //  period in us. Multiplies with Main_Timer_Period
+static uint32_t SAMPLING_PERIOD = 100; //  period in us. Multiplies with Main_Timer_Period
+static uint32_t DEBOUNCE_TIME = 1000; // period in us. Multiplies with Main_Timer_Period
 volatile bool periodflag = false; // Flag used to measure period between every other zero crossing
-volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period of mains to be used for True RMS
-
-//Data EXPERIMENTAL
-volatile int32_t t_data[10000];
-volatile int8_t v_data[10000];
+volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period (us) of mains to be used for True RMS
 
 sm_t SM;
+
+/*
+myTimer.begin(function, microseconds);
+myTimer.priority(number); // 0-255
+myTimer.update(microseconds); // Change the interval.
+myTimer.end(); // Stop calling the function
+*/
+
+void _timer_ISR(){
+  PollingTimer++;
+  SampleTimer++;
+  ZeroCrossTimer++;
+  DebounceTimer++;
+}
 
 void sm_execute(sm_t *psm) {
   /* To do:
@@ -308,8 +321,13 @@ void ZEROCROSS() {
   {
     MainsPeriod = ZeroCrossTimer;
     ZeroCrossTimer = 0;
+    voltageRMS=sqrt(voltage/sample_count);
+    currentRMS=sqrt(current/sample_count);
+    calcTemp();
+    sample_count=0;
+    voltage=0;
+    current=0;
     periodflag = true;
-
   }
   else if ( digitalRead(Zerocross) == 1 && periodflag == true)
   {
@@ -337,20 +355,22 @@ void setTemp() {
   analogWrite(PWMout, new_dc); // Sinal de controlo do controlador
 }
 
-void sampleCurrent() {
+float sampleCurrent() {
   float sample = 0;
   sample = analogRead(A1Pin);
   sample = sample * 3300 / 4095;
   sample = sample - 1650;
   sample = sample / CURRENT_K1;
   sample = sample * CURRENT_K2 / 1000;
-  current = sample;
+
   Serial.print("\n\rCorrente: ");
   Serial.print(sample);
   Serial.print(" Ap");
+
+  return sample;
 }
 
-void sampleVoltage() {
+float sampleVoltage() {
   float sample = 0;
   sample = analogRead(A2Pin);
   sample = sample * 3300 / 4095;
@@ -359,11 +379,12 @@ void sampleVoltage() {
   Serial.print("\n\rTensao: ");
   Serial.print(sample);
   Serial.print(" Vp");
-  voltage = sample;
+
+  return sample;
 }
 
 void calcTemp() {
-  resistance = voltage / current;
+  resistance = voltageRMS/currentRMS;
   temperature = (resistance - R_ZERO) / (TEMP_COEF * R_ZERO);
   Serial.print("\n\rResistencia: ");
   Serial.print(resistance);
@@ -411,12 +432,16 @@ void printState() {
   }
 }
 
+float power2(float x) {
+  return x*x;
+}
+
 void setup() {
   //Uart settings
   /*
-       Data bits - 8
-       Parity    - None
-       Stop bits - 1
+    Data bits - 8
+    Parity    - None
+    Stop bits - 1
   */
   Serial.begin(BAUDRATE);
 
@@ -448,17 +473,20 @@ void setup() {
   analogWriteResolution(12); // With 12 bits, the frequency is 36621.09 Hz (teensy 4.1 doc)
   analogWrite(PWMout, 0); // Power controller control signal
 
+  //Start Timer ISR
+  MainTimer.begin(_timer_ISR, MAIN_TIMER_PERIOD);
+  MainTimer.priority(128);
+
   //Initialize state machine
   sm_init(&SM, st_OFF);
   Serial.print("\x1b[2J"); //Clear screen
-  Serial.print("\rState: ");
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
 
   // Polling
-  if (PollingTimer >= POLLING_PERIOD) //Talvez seja melhor correr isto à frequência do máxima?
+  if (PollingTimer >= POLLING_PERIOD) //Talvez seja melhor correr isto à frequência máxima?
   {
     if (digitalRead(ResetIO) == 1 && ResetIO_old == 0)
     {
@@ -494,7 +522,10 @@ void loop() {
     }
     PollingTimer = 0;
   }
+
   sm_execute(&SM);
+  //printState();
+
   // Keyboard Simulation to test state machine
   uint8_t incomingByte = 0;
   if (Serial.available() > 0) {
@@ -544,35 +575,14 @@ void loop() {
     }
   }
 
+  //Serial.print("\r\x1b[2J"); //Clear screen
 
-  //Random tests
+  //Sampling
   if (SampleTimer >= SAMPLING_PERIOD)
   {
-    Serial.print("\r\x1b[2J"); //Clear screen
-    //Serial.print("\r\x1b[7C");
-    //Serial.print("\x1b[K");
-    printState();
-    sampleCurrent();
-    sampleVoltage();
-    calcTemp();
+    current+=power2(sampleCurrent());
+    voltage+=power2(sampleVoltage());
+    sample_count++;
     SampleTimer = 0;
   }
-  /*
-    if (i == 20)
-    {
-    Serial.print("\n\x1b[2J\r"); //Clear screen
-    Serial.print("Tempo (ms): ");
-    for (int j = 0; j < 20; j++) {
-      Serial.print("  |  ");
-      Serial.print(t_data[j]);
-    }
-    Serial.println();
-    Serial.print("Tensao (V): ");
-    for (int j = 0; j < 20; j++) {
-      Serial.print("  |  ");
-      Serial.print(v_data[j]);
-
-    delay(10000);
-    i=0;
-    }*/
 }
