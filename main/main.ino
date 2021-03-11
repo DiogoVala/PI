@@ -45,7 +45,7 @@ static uint16_t BAUDRATE = 9600;
 static double CURRENT_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
 static uint16_t CURRENT_K2 = 1000; // Constante de conversão do transformador de corrente
 static double VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
-static double TEMP_COEF = 0.00385; // Example of temperature coefficient
+static double TEMP_COEF = 0.00393; // Example of temperature coefficient
 static double R_ZERO = 1; //Resistance of heatband at 0ºC
 volatile double current = 0; // Peak current value
 volatile double voltage = 0; // Peak voltage value
@@ -89,8 +89,7 @@ volatile int8_t v_data[10000];
 
 sm_t SM;
 
-void sm_execute(sm_t *psm)
-{
+void sm_execute(sm_t *psm) {
   /* To do:
     -transições para o estado de alarme
     -transição do estado de alarme para a iniciação do sistema (reset)
@@ -105,7 +104,6 @@ void sm_execute(sm_t *psm)
       /* State Actions*/
       if (event == ev_ENABLE_HIGH)
       {
-        Serial.print("\rState: ON\n");
         /*Transition actions*/
         psm->current_state = st_ON;
       }
@@ -116,13 +114,11 @@ void sm_execute(sm_t *psm)
       if (event == ev_ENABLE_LOW)
       {
         /*Transition actions*/
-        Serial.print("\rState: OFF\n");
         psm->current_state = st_OFF;
       }
       else if ( event == ev_START_HIGH)
       {
         /*Transition actions*/
-        Serial.print("\rState: CYCLESTART\n");
         psm->current_state = st_CYCLESTART;
       }
       break;
@@ -132,33 +128,33 @@ void sm_execute(sm_t *psm)
       if (event == ev_START_LOW)
       {
         /*Transition actions*/
-        Serial.print("\rState: ON\n");
         psm->current_state = st_ON;
       }
       else if (event == ev_PREHEAT_HIGH)
       {
         /*Transition actions*/
-        Serial.print("\rState: PREHEAT\n");
         psm->current_state = st_PREHEATING;
       }
       else if ( event == ev_SEALING_HIGH)
       {
         /*Transition actions*/
-        Serial.print("\rState: RAISETEMP\n");
         psm->current_state = st_RAISETEMP;
+      }
+      else if (event == ev_ENABLE_LOW)
+      {
+        /*Transition actions*/
+        psm->current_state = st_OFF;
       }
       else if ( event == ev_RESET)
       {
         if (GetPinVal(EnableIO))
         {
           /*Transition actions*/
-          Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
         }
         else
         {
           /*Transition actions*/
-          Serial.print("\rState: OFF\n");
           psm->current_state = st_OFF;
         }
       }
@@ -169,27 +165,28 @@ void sm_execute(sm_t *psm)
       if (event == ev_PREHEAT_LOW)
       {
         /*Transition actions*/
-        Serial.print("\rState: CYCLESTART\n");
         psm->current_state = st_CYCLESTART;
       }
       else if (event == ev_SEALING_HIGH)
       {
         /*Transition actions*/
-        Serial.print("\rState: RAISETEMP\n");
         psm->current_state = st_RAISETEMP;
+      }
+      else if (event == ev_ENABLE_LOW)
+      {
+        /*Transition actions*/
+        psm->current_state = st_OFF;
       }
       else if ( event == ev_RESET)
       {
         if (GetPinVal(EnableIO))
         {
           /*Transition actions*/
-          Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
         }
         else
         {
           /*Transition actions*/
-          Serial.print("\rState: OFF\n");
           psm->current_state = st_OFF;
         }
       }
@@ -200,22 +197,23 @@ void sm_execute(sm_t *psm)
       if (event == ev_TEMPSET)
       {
         /*Transition actions*/
-        Serial.print("\rState: SEAL\n");
-
         psm->current_state = st_SEAL;
+      }
+      else if (event == ev_ENABLE_LOW)
+      {
+        /*Transition actions*/
+        psm->current_state = st_OFF;
       }
       else if ( event == ev_RESET)
       {
         if (GetPinVal(EnableIO))
         {
           /*Transition actions*/
-          Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
         }
         else
         {
           /*Transition actions*/
-          Serial.print("\rState: OFF\n");
           psm->current_state = st_OFF;
         }
       }
@@ -226,19 +224,21 @@ void sm_execute(sm_t *psm)
       if (event == ev_SEALING_LOW)
       {
         /*Transition actions*/
-        Serial.print("\rState: CYCLESTART\n");
         psm->current_state = st_CYCLESTART;
+      }
+      else if (event == ev_ENABLE_LOW)
+      {
+        /*Transition actions*/
+        psm->current_state = st_OFF;
       }
       else if ( event == ev_RESET)
       {
         if (GetPinVal(EnableIO))
         {
-          Serial.print("\rState: ON\n");
           psm->current_state = st_ON;
         }
         else
         {
-          Serial.print("\rState: OFF\n");
           psm->current_state = st_OFF;
         }
       }
@@ -249,7 +249,6 @@ void sm_execute(sm_t *psm)
       break;
   }
 }
-
 /*
   Maquina de estados assíncrona: fazer excecute() a cada novo evento?
 */
@@ -318,8 +317,7 @@ void ZEROCROSS() {
   }
 }
 
-void setTemp()
-{
+void setTemp() {
   uint16_t new_dc = duty_cycle;
   int16_t temp_error = temperature - setpoint;
   integral += temp_error;
@@ -339,8 +337,7 @@ void setTemp()
   analogWrite(PWMout, new_dc); // Sinal de controlo do controlador
 }
 
-void sampleCurrent()
-{
+void sampleCurrent() {
   float sample = 0;
   sample = analogRead(A1Pin);
   sample = sample * 3300 / 4095;
@@ -348,34 +345,70 @@ void sampleCurrent()
   sample = sample / CURRENT_K1;
   sample = sample * CURRENT_K2 / 1000;
   current = sample;
-  Serial.print("\rCorrente: ");
+  Serial.print("\n\rCorrente: ");
   Serial.print(sample);
-  Serial.println(" Ap");
+  Serial.print(" Ap");
 }
 
-void sampleVoltage()
-{
+void sampleVoltage() {
   float sample = 0;
   sample = analogRead(A2Pin);
   sample = sample * 3300 / 4095;
   sample = sample - 1650;
   sample = sample * VOLTAGE_K1 / 1000;
-  Serial.print("\rTensao: ");
+  Serial.print("\n\rTensao: ");
   Serial.print(sample);
-  Serial.println(" Vp");
+  Serial.print(" Vp");
   voltage = sample;
 }
 
-void calcTemp()
-{
+void calcTemp() {
   resistance = voltage / current;
   temperature = (resistance - R_ZERO) / (TEMP_COEF * R_ZERO);
-  Serial.print("\rResistencia: ");
+  Serial.print("\n\rResistencia: ");
   Serial.print(resistance);
-  Serial.println(" Ohm");
-  Serial.print("\rTemperatura: ");
+  Serial.print(" Ohm");
+  Serial.print("\n\rTemperatura: ");
   Serial.print(temperature);
-  Serial.println(" C");
+  Serial.print(" C");
+}
+
+void Debounce() {
+  DebounceTimer = 0;
+  while (DebounceTimer < DEBOUNCE_TIME);
+}
+
+bool GetPinVal(uint8_t pin) {
+  if (digitalRead(pin) == 1)
+    return true;
+  return false;
+}
+
+void printState() {
+  Serial.print("\n\rState: ");
+  switch (sm_get_current_state(&SM)) {
+    case st_OFF:
+      Serial.print("OFF");
+      break;
+    case st_ON:
+      Serial.print("ON");
+      break;
+    case st_CYCLESTART:
+      Serial.print("CYCLESTART");
+      break;
+    case st_PREHEATING:
+      Serial.print("PREHEATING");
+      break;
+    case st_RAISETEMP:
+      Serial.print("RAISETEMP");
+      break;
+    case st_SEAL:
+      Serial.print("SEAL");
+      break;
+    case st_ALARM:
+      Serial.print("ALARM");
+      break;
+  }
 }
 
 void setup() {
@@ -417,22 +450,13 @@ void setup() {
 
   //Initialize state machine
   sm_init(&SM, st_OFF);
-}
-
-void Debounce(){
-  DebounceTimer=0;
-  while(DebounceTimer<DEBOUNCE_TIME);
-}
-
-bool GetPinVal(uint8_t pin){
-  if(digitalRead(pin)==1)
-    return true;
-  return false;
+  Serial.print("\x1b[2J"); //Clear screen
+  Serial.print("\rState: ");
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  
+
   // Polling
   if (PollingTimer >= POLLING_PERIOD) //Talvez seja melhor correr isto à frequência do máxima?
   {
@@ -443,7 +467,6 @@ void loop() {
     }
     if (digitalRead(EnableIO) != EnableIO_old)
     {
-      Serial.print("\rEnable\n");
       Debounce();
       EnableIO_old = digitalRead(EnableIO);
       ENABLE();
@@ -451,30 +474,33 @@ void loop() {
 
     if (digitalRead(StartIO) != StartIO_old)
     {
+      Debounce();
       StartIO_old = digitalRead(StartIO);
       START();
     }
 
     if (digitalRead(PreheatIO) != PreheatIO_old)
     {
+      Debounce();
       PreheatIO_old = digitalRead(PreheatIO);
       PREHEAT();
     }
 
     if (digitalRead(SealingIO) != SealingIO_old)
     {
+      Debounce();
       SealingIO_old = digitalRead(SealingIO);
       SEALING();
     }
     PollingTimer = 0;
   }
   sm_execute(&SM);
-   // Keyboard Simulation to test state machine
-  uint8_t incomingByte=0;
+  // Keyboard Simulation to test state machine
+  uint8_t incomingByte = 0;
   if (Serial.available() > 0) {
     incomingByte = Serial.read(); // Byte is received in DECIMAL format
-    //Serial.print(incomingByte); 
-    switch(incomingByte){
+    //Serial.print(incomingByte);
+    switch (incomingByte) {
       case 'q':
         sm_send_event(&SM, ev_ENABLE_HIGH);
         sm_execute(&SM);
@@ -498,11 +524,11 @@ void loop() {
       case 'd':
         sm_send_event(&SM, ev_PREHEAT_LOW);
         sm_execute(&SM);
-       break;
+        break;
       case 'r':
         sm_send_event(&SM, ev_SEALING_HIGH);
         sm_execute(&SM);
-       break;
+        break;
       case 'f':
         sm_send_event(&SM, ev_SEALING_LOW);
         sm_execute(&SM);
@@ -510,25 +536,30 @@ void loop() {
       case 't':
         sm_send_event(&SM, ev_TEMPSET);
         sm_execute(&SM);
+        break;
       default:
         sm_send_event(&SM, ev_RESET);
         sm_execute(&SM);
         break;
     }
   }
-/*
+
+
   //Random tests
   if (SampleTimer >= SAMPLING_PERIOD)
   {
-    Serial.print("\n\x1b[2J\r"); //Clear screen
+    Serial.print("\r\x1b[2J"); //Clear screen
+    //Serial.print("\r\x1b[7C");
+    //Serial.print("\x1b[K");
+    printState();
     sampleCurrent();
     sampleVoltage();
     calcTemp();
     SampleTimer = 0;
-  }*/
+  }
   /*
-  if (i == 20)
-  {
+    if (i == 20)
+    {
     Serial.print("\n\x1b[2J\r"); //Clear screen
     Serial.print("Tempo (ms): ");
     for (int j = 0; j < 20; j++) {
@@ -543,5 +574,5 @@ void loop() {
 
     delay(10000);
     i=0;
-  }*/
+    }*/
 }
