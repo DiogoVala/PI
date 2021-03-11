@@ -362,11 +362,6 @@ float sampleCurrent() {
   sample = sample - 1650;
   sample = sample / CURRENT_K1;
   sample = sample * CURRENT_K2 / 1000;
-
-  Serial.print("\n\rCorrente: ");
-  Serial.print(sample);
-  Serial.print(" Ap");
-
   return sample;
 }
 
@@ -376,22 +371,12 @@ float sampleVoltage() {
   sample = sample * 3300 / 4095;
   sample = sample - 1650;
   sample = sample * VOLTAGE_K1 / 1000;
-  Serial.print("\n\rTensao: ");
-  Serial.print(sample);
-  Serial.print(" Vp");
-
   return sample;
 }
 
 void calcTemp() {
   resistance = voltageRMS/currentRMS;
   temperature = (resistance - R_ZERO) / (TEMP_COEF * R_ZERO);
-  Serial.print("\n\rResistencia: ");
-  Serial.print(resistance);
-  Serial.print(" Ohm");
-  Serial.print("\n\rTemperatura: ");
-  Serial.print(temperature);
-  Serial.print(" C");
 }
 
 void Debounce() {
