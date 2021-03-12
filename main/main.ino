@@ -46,7 +46,8 @@ static float CURRENT_K1 = 29.4643; // Constante de conversão de corrente em ten
 static uint16_t CURRENT_K2 = 1000; // Constante de conversão do transformador de corrente
 static float VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
 static float TEMP_COEF = 0.00393; // Example of temperature coefficient
-static float R_ZERO = 1; //Resistance of heatband at 0ºC
+static float R_ZERO = 0.8; //Resistance of heatband at reference temperature
+static float T_ZERO = 1; //Reference temperature
 volatile float current=0; // Storage of current samples
 volatile float voltage=0; // Storage of voltage samples
 volatile uint16_t sample_count=0; //Number of samples taken
@@ -79,10 +80,12 @@ volatile unsigned long PollingTimer=0;
 volatile unsigned long SampleTimer=0;
 volatile unsigned long ZeroCrossTimer=0;
 volatile unsigned long DebounceTimer=0;
-static uint32_t MAIN_TIMER_PERIOD = 1; // Period of timer isr
+volatile unsigned long PrintTimer=0;
+static uint32_t MAIN_TIMER_PERIOD = 1; // Period of main timer isr
 static uint32_t POLLING_PERIOD = 10; //  period in us. Multiplies with Main_Timer_Period
 static uint32_t SAMPLING_PERIOD = 100; //  period in us. Multiplies with Main_Timer_Period
 static uint32_t DEBOUNCE_TIME = 1000; // period in us. Multiplies with Main_Timer_Period
+static uint32_t PRINT_PERIOD = 500000; //
 volatile bool periodflag = false; // Flag used to measure period between every other zero crossing
 volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period (us) of mains to be used for True RMS
 
@@ -100,6 +103,7 @@ void _timer_ISR(){
   SampleTimer++;
   ZeroCrossTimer++;
   DebounceTimer++;
+  PrintTimer++;
 }
 
 void sm_execute(sm_t *psm) {
@@ -376,7 +380,7 @@ float sampleVoltage() {
 
 void calcTemp() {
   resistance = voltageRMS/currentRMS;
-  temperature = (resistance - R_ZERO) / (TEMP_COEF * R_ZERO);
+  temperature = (resistance - R_ZERO+R_ZERO*TEMP_COEF*T_ZERO) / (TEMP_COEF * R_ZERO);
 }
 
 void Debounce() {
@@ -394,25 +398,25 @@ void printState() {
   Serial.print("\n\rState: ");
   switch (sm_get_current_state(&SM)) {
     case st_OFF:
-      Serial.print("OFF");
+      Serial.println("OFF");
       break;
     case st_ON:
-      Serial.print("ON");
+      Serial.println("ON");
       break;
     case st_CYCLESTART:
-      Serial.print("CYCLESTART");
+      Serial.println("CYCLESTART");
       break;
     case st_PREHEATING:
-      Serial.print("PREHEATING");
+      Serial.println("PREHEATING");
       break;
     case st_RAISETEMP:
-      Serial.print("RAISETEMP");
+      Serial.println("RAISETEMP");
       break;
     case st_SEAL:
-      Serial.print("SEAL");
+      Serial.println("SEAL");
       break;
     case st_ALARM:
-      Serial.print("ALARM");
+      Serial.println("ALARM");
       break;
   }
 }
@@ -509,7 +513,6 @@ void loop() {
   }
 
   sm_execute(&SM);
-  //printState();
 
   // Keyboard Simulation to test state machine
   uint8_t incomingByte = 0;
@@ -570,4 +573,16 @@ void loop() {
     sample_count++;
     SampleTimer = 0;
   }
+  if (PrintTimer >= PRINT_PERIOD){
+    Serial.print("\r\x1b[2J"); //Clear screen
+    printState();
+    Serial.print("Tensao RMS: ");
+    Serial.println(voltageRMS);
+    Serial.print("CorrenteRMS : ");
+    Serial.println(currentRMS);
+    Serial.print("Temperatura: ");
+    Serial.println(temperature);
+    PrintTimer=0;
+  }
+
 }
