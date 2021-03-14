@@ -5,7 +5,7 @@ import sys
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    engine = QQmlApplicationEngine("graph_vfunct.qml")
+    engine = QQmlApplicationEngine("graph.qml")
     engine.quit.connect(app.quit)
     win = engine.rootObjects()[0]
     win.show()
