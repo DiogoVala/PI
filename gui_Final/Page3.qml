@@ -1,5 +1,6 @@
-import QtQuick.Controls 2.15
+import QtQuick.Controls 2.3
 import QtQuick 2.11
+import QtCharts 2.15
 
 Page {
     Column {
@@ -48,5 +49,6 @@ Page {
         x: 160
         y: 90
     }
+
 }
 

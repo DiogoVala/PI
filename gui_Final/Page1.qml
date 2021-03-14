@@ -1,5 +1,6 @@
 import QtQuick.Controls 2.3
 import QtQuick 2.11
+import QtCharts 2.15
 
 Page {
     Column {

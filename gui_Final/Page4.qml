@@ -1,5 +1,6 @@
-import QtQuick.Controls 2.15
+import QtQuick.Controls 2.3
 import QtQuick 2.11
+import QtCharts 2.15
 
 Page {
     Column {
@@ -42,11 +43,33 @@ Page {
                 mystackview.push(page1);
             }
     }
-    Label {
-        text: "Pagina Info"
-        font.pixelSize : 20
-        x: 160
-        y: 90
+    ScrollView {
+    x: 140
+    y: 30
+    width: 230
+    height: 160
+    clip: true
+    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+    ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+
+        Label {
+            text: "1º isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+isto é só um exemplo
+16º isto é só um exemplo"
+        }
     }
 }
 
