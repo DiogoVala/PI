@@ -1,13 +1,3 @@
-//https://forum.arduino.cc/index.php?topic=94861.0
-
-//zoomkat 1-10-11
-//web LED code
-//for use with IDE 1.0
-//open serial monitor to see what the arduino receives
-//use the \ slash to escape the " in the html
-//address will look like http://192.168.1.102:84/ when submited
-//for use with W5100 based ethernet shields
-
 #include <SPI.h>
 #include <NativeEthernet.h>
 
@@ -49,24 +39,7 @@ void loop(){
   if (client) {   // se houver algum cliente disponível
     while (client.connected()) {
       if (client.available()) {
-        char c = client.read();
-
-        //read char by char HTTP request
-        if (readString.length() < 100) {
-
-          //store characters to string
-          readString += c;
-          //Serial.print(c); //uncomment to see in serial monitor
-        }
-
-        //if HTTP request has ended
-        if (c == '\n') {
-
-          ///////////////
-          Serial.println(readString);
-
           //now output HTML data header
-
           client.println("HTTP/1.1 200 OK");
           client.println("Content-Type: text/html");
           client.println();
@@ -96,12 +69,6 @@ void loop(){
           delay(1);   // para permitir que o rowser receba toda a informação que lhe é enviada
           //stopping client
           client.stop();
-
-          
-          //clearing string for next read
-          readString="";
-
-        }
       }
     }
   }
