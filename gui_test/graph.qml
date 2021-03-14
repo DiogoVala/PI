@@ -12,7 +12,7 @@ ApplicationWindow {
         id: chart
         title: "data"
         antialiasing: true
-        animationOptions: ChartView.SeriesAnimations
+        //animationOptions: ChartView.SeriesAnimations
         legend.visible:false
         margins.left: 10
         margins.right: 10
@@ -31,8 +31,8 @@ ApplicationWindow {
         ValueAxis {
             id: myAxisY
             min: 0
-            max: 50
-            tickCount: 6
+            max: 20
+            tickCount: 5
         }
     
         LineSeries {
@@ -44,11 +44,11 @@ ApplicationWindow {
     
         Timer {
             id: time
-            interval: 1000
+            interval: 200
             running: true
             repeat: true
             onTriggered: {
-                lineSeries.append(chart.timer,Math.random()*50)
+                lineSeries.append(chart.timer,Math.random()*20)
                 chart.timer = chart.timer + 1
             }
         }
