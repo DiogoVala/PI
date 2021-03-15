@@ -163,23 +163,9 @@ Page {
         x: 140
         y: 140
         id: rect
-        property bool isRed: true
-        width: 60
-        height: 40
-        color: isRed ? "red" : "green"
-        Text {
-            anchors.centerIn: parent
-            text: "Pre-heat?"
-            color: "black"
+        CheckBox {
+        text: "pre-heat"
         }
-
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                rect.isRed = !rect.isRed
-            }
-        }
-
     }
 
 }

@@ -94,9 +94,7 @@ ApplicationWindow {
         Item {
             id: clearitem
             function clearvalues() {
-                for (var i = 0; i < 10; i++) {
-                    lineSeries.remove(i)
-                }
+                linwSeries.removeAllSeries
             } 
             Component.onCompleted: clearvalues()
         }
