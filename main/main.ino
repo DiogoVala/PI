@@ -11,10 +11,11 @@
       -transição do estado de alarme para a iniciação do sistema (reset)
       -ações de cada estado
       -ações de transição
-    -Cálculo do True RMS
+    -Cálculo do True RMS - Primeiro teste
     -Organizar o funcionamento do loop
     -Device driver - Ethernet
     -Device driver - Display
+    -Debouncer está com busy waiting
 */
 
 #include "statemachine.h"
@@ -48,9 +49,9 @@ static float VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito d
 static float TEMP_COEF = 0.00393; // Example of temperature coefficient
 static float R_ZERO = 0.8; //Resistance of heatband at reference temperature
 static float T_ZERO = 1; //Reference temperature
-volatile float current=0; // Storage of current samples
-volatile float voltage=0; // Storage of voltage samples
-volatile uint16_t sample_count=0; //Number of samples taken
+volatile float current = 0; // Storage of current samples
+volatile float voltage = 0; // Storage of voltage samples
+volatile uint16_t sample_count = 0; //Number of samples taken
 volatile float currentRMS = 0; // True RMS current
 volatile float voltageRMS = 0; // True RMS voltage
 volatile float resistance = 0; // Vrms/Irms
@@ -76,11 +77,11 @@ volatile uint8_t ResetIO_old;
 
 //Timing
 IntervalTimer MainTimer; // Interrupt timer
-volatile unsigned long PollingTimer=0;
-volatile unsigned long SampleTimer=0;
-volatile unsigned long ZeroCrossTimer=0;
-volatile unsigned long DebounceTimer=0;
-volatile unsigned long PrintTimer=0;
+volatile unsigned long PollingTimer = 0;
+volatile unsigned long SampleTimer = 0;
+volatile unsigned long ZeroCrossTimer = 0;
+volatile unsigned long DebounceTimer = 0;
+volatile unsigned long PrintTimer = 0;
 static uint32_t MAIN_TIMER_PERIOD = 1; // Period of main timer isr
 static uint32_t POLLING_PERIOD = 10; //  period in us. Multiplies with Main_Timer_Period
 static uint32_t SAMPLING_PERIOD = 100; //  period in us. Multiplies with Main_Timer_Period
@@ -92,13 +93,19 @@ volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period (us) of mains to be us
 sm_t SM;
 
 /*
-myTimer.begin(function, microseconds);
-myTimer.priority(number); // 0-255
-myTimer.update(microseconds); // Change the interval.
-myTimer.end(); // Stop calling the function
+  myTimer.begin(function, microseconds);
+  myTimer.priority(number); // 0-255
+  myTimer.update(microseconds); // Change the interval.
+  myTimer.end(); // Stop calling the function
 */
 
-void _timer_ISR(){
+/* DUVIDA 1
+   Esta rotina funciona com o interrupt de um dos 4 timers do teensy, a uma freq. configurável.
+   Neste contexto fiz o mesmo que fiz em SIE e usei um único timer para incrementar contadores.
+   Os contadores seríam os timers para as várias tarefas a realizar periodidamente.
+   Esta implementação está certa ou aconselha outro método?
+*/
+void _timer_ISR() {
   PollingTimer++;
   SampleTimer++;
   ZeroCrossTimer++;
@@ -106,6 +113,14 @@ void _timer_ISR(){
   PrintTimer++;
 }
 
+/* DUVIDA 2
+   A função execute será chamada periodicamente, mas as tarefas a executar dentro de cada estado
+   também são periódicas. Não estou a conseguir chegar a uma solução que permita a peridiocidade
+   de ambas as situações.
+   A minha única ideia foi ter um sistema de flags dentro de cada estado que sinaliza ao loop
+   principal que pode ou não executar uma certa tarefa (com recurso a ifs), mas pareceu-me
+   repetivo e faz pouco uso da estrutura da máquina de estados.
+*/
 void sm_execute(sm_t *psm) {
   /* To do:
     -transições para o estado de alarme
@@ -266,9 +281,8 @@ void sm_execute(sm_t *psm) {
       break;
   }
 }
-/*
-  Maquina de estados assíncrona: fazer excecute() a cada novo evento?
-*/
+
+// Functions that check pin value and send new event to state machine
 void ENABLE() {
   if (digitalRead(EnableIO) == 0)
   {
@@ -279,7 +293,6 @@ void ENABLE() {
     sm_send_event(&SM, ev_ENABLE_HIGH);
   }
 }
-
 void START() {
   if (digitalRead(StartIO) == 0)
   {
@@ -290,7 +303,6 @@ void START() {
     sm_send_event(&SM, ev_START_HIGH);
   }
 }
-
 void PREHEAT() {
   if (digitalRead(PreheatIO) == 0)
   {
@@ -301,7 +313,6 @@ void PREHEAT() {
     sm_send_event(&SM, ev_PREHEAT_HIGH);
   }
 }
-
 void SEALING() {
   if (digitalRead(SealingIO) == 0)
   {
@@ -312,7 +323,6 @@ void SEALING() {
     sm_send_event(&SM, ev_SEALING_HIGH);
   }
 }
-
 void RESET() {
   if (digitalRead(ResetIO == 1))
   {
@@ -320,17 +330,22 @@ void RESET() {
   }
 }
 
+// External ISR to measure the 230Vac period
 void ZEROCROSS() {
+  /*
+    To do:
+    Periodo necessário ou basta o número de amostras em cada periodo?
+  */
   if (digitalRead(Zerocross) == 1 && periodflag == false)
   {
     MainsPeriod = ZeroCrossTimer;
     ZeroCrossTimer = 0;
-    voltageRMS=sqrt(voltage/sample_count);
-    currentRMS=sqrt(current/sample_count);
+    voltageRMS = sqrt(voltage / sample_count);
+    currentRMS = sqrt(current / sample_count);
     calcTemp();
-    sample_count=0;
-    voltage=0;
-    current=0;
+    sample_count = 0;
+    voltage = 0;
+    current = 0;
     periodflag = true;
   }
   else if ( digitalRead(Zerocross) == 1 && periodflag == true)
@@ -339,7 +354,11 @@ void ZEROCROSS() {
   }
 }
 
+// Control function to generate PWM
 void setTemp() {
+  /* To do:
+   * Componente derivativa
+   */
   uint16_t new_dc = duty_cycle;
   int16_t temp_error = temperature - setpoint;
   integral += temp_error;
@@ -359,6 +378,7 @@ void setTemp() {
   analogWrite(PWMout, new_dc); // Sinal de controlo do controlador
 }
 
+// Samples ADC value for current and processes the data
 float sampleCurrent() {
   float sample = 0;
   sample = analogRead(A1Pin);
@@ -369,6 +389,7 @@ float sampleCurrent() {
   return sample;
 }
 
+// Samples ADC value for voltage and processes the data
 float sampleVoltage() {
   float sample = 0;
   sample = analogRead(A2Pin);
@@ -378,22 +399,30 @@ float sampleVoltage() {
   return sample;
 }
 
+// Calculates the temperature at the load
 void calcTemp() {
-  resistance = voltageRMS/currentRMS;
-  temperature = (resistance - R_ZERO+R_ZERO*TEMP_COEF*T_ZERO) / (TEMP_COEF * R_ZERO);
+  resistance = voltageRMS / currentRMS;
+  temperature = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);
 }
 
+/* DUVIDA 3
+   Esta forma de debounce pareceu-me a maneira mais direta e simples.
+   A função é chamada sempre que é detetada uma mudança de valor por polling.
+   O professor concorda ou é uma má prática?
+*/
 void Debounce() {
   DebounceTimer = 0;
   while (DebounceTimer < DEBOUNCE_TIME);
 }
 
+// Fetches digital pin value (used in sm_execute)
 bool GetPinVal(uint8_t pin) {
   if (digitalRead(pin) == 1)
     return true;
   return false;
 }
 
+// Prints SM state
 void printState() {
   Serial.print("\n\rState: ");
   switch (sm_get_current_state(&SM)) {
@@ -422,7 +451,7 @@ void printState() {
 }
 
 float power2(float x) {
-  return x*x;
+  return x * x;
 }
 
 void setup() {
@@ -472,8 +501,6 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-
   // Polling
   if (PollingTimer >= POLLING_PERIOD) //Talvez seja melhor correr isto à frequência máxima?
   {
@@ -562,18 +589,17 @@ void loop() {
         break;
     }
   }
-
-  //Serial.print("\r\x1b[2J"); //Clear screen
-
+  
   //Sampling
   if (SampleTimer >= SAMPLING_PERIOD)
   {
-    current+=power2(sampleCurrent());
-    voltage+=power2(sampleVoltage());
+    current += power2(sampleCurrent());
+    voltage += power2(sampleVoltage());
     sample_count++;
     SampleTimer = 0;
   }
-  if (PrintTimer >= PRINT_PERIOD){
+  //Priting
+  if (PrintTimer >= PRINT_PERIOD) {
     Serial.print("\r\x1b[2J"); //Clear screen
     printState();
     Serial.print("Tensao RMS: ");
@@ -582,7 +608,7 @@ void loop() {
     Serial.println(currentRMS);
     Serial.print("Temperatura: ");
     Serial.println(temperature);
-    PrintTimer=0;
+    PrintTimer = 0;
   }
 
 }
