@@ -7,8 +7,8 @@ ApplicationWindow {
     title: "My Application"
     width: 385
     height: 220
-
-    StackView{
+    
+    StackView {
         id: mystackview
         anchors.fill: parent
         initialItem: page1

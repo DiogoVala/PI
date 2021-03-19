@@ -90,12 +90,19 @@ Page {
         property var ydataplot: ydataitem.ydatavalues()
         property var xdataplot: xdataitem.xdatavalues()
 
+        property var time
+        property var start: new Date().getTime()
+
+        property double ampere
+        property double volt
+
         ValueAxis {
             id: myAxisX1
             min: 0
             max: 10
             tickCount: 11 // how many grid lines are drawn on the chart
             labelsFont:Qt.font({pointSize: 6})
+            labelsVisible: false // hide x axis values
         }
 
         ValueAxis {
@@ -151,15 +158,43 @@ Page {
         }
 
         Timer {
-            id: time
+            id: timer
             interval: 500 // in ms
             running: true
             repeat: true
             onTriggered: {
                 clearitem.clearvalues()
                 plotitem.plotvalues()
+                chart.time = new Date().getTime() - chart.start
+                //console.debug(chart.time)
+                chart.ampere = Math.random()*20
+                chart.volt = Math.random()*20
             }
         }
+    }
+
+    Label {
+        id: time_elapsed
+        text: "Time elapsed: " + chart.time + "ms"
+        font.pixelSize : 10
+        x: 90
+        y: 200
+    }
+
+    Label {
+        id: current
+        text: "Current: " + (chart.ampere).toFixed(2) + "A"
+        font.pixelSize : 10
+        x: 250
+        y: 200
+    }
+
+    Label {
+        id: voltage
+        text: "Voltage: " + (chart.volt).toFixed(2) + "V"
+        font.pixelSize : 10
+        x: 250
+        y: 190
     }
 }
 
