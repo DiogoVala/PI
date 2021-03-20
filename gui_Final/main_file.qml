@@ -31,5 +31,16 @@ ApplicationWindow {
         id: page4
         Page4 {}
     }
-
+    Component {
+        id: page5
+        Page5 {}
+    }
+    Component {
+        id: page6
+        Page6 {}
+    }
+    Component {
+        id: page7
+        Page7 {}
+    }
 }

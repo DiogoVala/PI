@@ -35,7 +35,7 @@ Page {
             }
     }
     ScrollView {
-    x: 140
+    x: 100
     y: 30
     width: 230
     height: 160
@@ -44,11 +44,28 @@ Page {
     ScrollBar.vertical.policy: ScrollBar.AlwaysOn
 
         Label {
-            text: "email:
-geral@azevedosindustria.com
-
-tel. +351 22 747 15 70
-fax. +351 22 747 15 79"
+            text: "Bem vindo ao manual
+Na página De. Param, pode definir e
+vizualizar os diversos valores atuais
+dos parâmetros do sistema. Para isso,
+basta escolher o parâmetro e o seu
+valor atual aparecerá no ecrã, para
+escolher outro valor pode usar a barra
+de rolagem e no fim validar o valor.
+Nesta primeira página, pode também
+escolher se deseja pre-heat, ou seja,
+se deseja pre-aquecer de modo a
+acelerar a selagem.
+Na página Graf, pode visualizar data
+em tempo real. De notar, que se tem
+3 possíveis gráficos que pode visualizar
+para mudar de página utilize o botão H
+para ir para a página inicial.
+Por fim, tem a página de mais
+informações onde pode encontrar
+diversas informações de como operar
+este dispositivo e como contactar
+os responsáveis pela manutenção."
         }
     }
 }

@@ -72,7 +72,7 @@ Page {
 
     ChartView {
         id: chart
-        title: "data"
+        title: "data_3"
         antialiasing: true // make the line data more smooth
         //animationOptions: ChartView.SeriesAnimations // animation of the data
         legend.visible:false
