@@ -52,10 +52,6 @@ basta escolher o parâmetro e o seu
 valor atual aparecerá no ecrã, para
 escolher outro valor pode usar a barra
 de rolagem e no fim validar o valor.
-Nesta primeira página, pode também
-escolher se deseja pre-heat, ou seja,
-se deseja pre-aquecer de modo a
-acelerar a selagem.
 Na página Graf, pode visualizar data
 em tempo real. De notar, que se tem
 3 possíveis gráficos que pode visualizar
@@ -66,6 +62,8 @@ informações onde pode encontrar
 diversas informações de como operar
 este dispositivo e como contactar
 os responsáveis pela manutenção."
+            //horizontalAlignment: Text.AlignHCenter
+            anchors.centerIn: parent
         }
     }
 }

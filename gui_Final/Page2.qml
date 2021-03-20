@@ -159,14 +159,5 @@ Page {
         }
     }
 
-    Rectangle {
-        x: 140
-        y: 140
-        id: rect
-        CheckBox {
-        text: "pre-heat"
-        }
-    }
-
 }
 
