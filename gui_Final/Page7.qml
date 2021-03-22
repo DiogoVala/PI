@@ -6,7 +6,7 @@ Page {
     Column {
     spacing: 2
         Button {
-            text: "Contact us"
+            text: "Contactos"
             width: 80
             height: 72
 
@@ -15,7 +15,7 @@ Page {
             }
         }
         Button {
-            text: "need help?"
+            text: "Ajuda?"
             width: 80
             height: 72
 
@@ -44,19 +44,19 @@ Page {
     ScrollBar.vertical.policy: ScrollBar.AlwaysOn
 
         Label {
-            text: "Bem vindo ao manual
-Na página De. Param, pode definir e
-vizualizar os diversos valores atuais
+            text: "Bem vindo ao manual.
+Na página 'Parâmetros', pode definir e
+visualizar os diversos valores atuais
 dos parâmetros do sistema. Para isso,
 basta escolher o parâmetro e o seu
-valor atual aparecerá no ecrã, para
+valor atual aparecerá no ecrã. Para
 escolher outro valor pode usar a barra
-de rolagem e no fim validar o valor.
-Na página Graf, pode visualizar data
-em tempo real. De notar, que se tem
-3 possíveis gráficos que pode visualizar
-para mudar de página utilize o botão H
-para ir para a página inicial.
+deslizante e, no fim, validar o valor.
+Na página 'Gráficos', pode visualizar
+dados em tempo real. De notar que existem
+3 possíveis gráficos que pode visualizar.
+Para ir para a página inicial, utilize 
+o botão H.
 Por fim, tem a página de mais
 informações onde pode encontrar
 diversas informações de como operar
