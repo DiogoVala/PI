@@ -8,27 +8,30 @@ Page {
     Column {
     spacing: 2
         Button {
-            text: "Def. Param"
+            text: "Parâmetros"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page2);
             }
         }
         Button {
-            text: "Graf."
+            text: "Gráficos"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page3);
             }
         }
         Button {
-            text: "Info."
+            text: "Informações"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page4);
@@ -55,9 +58,6 @@ Page {
     }
     property real temperature;
     property real prefusion;
-    property real fusiontemp;
-    property real fusiondur;
-    property real cycle;
     property real voltage;
     property real current;
 
@@ -66,31 +66,22 @@ Page {
     }
 
     ComboBox {
-        x:100
-        y:50
+        x: 100
+        y: 50
         id: varibles
         model: ListModel {
             id: model;
             ListElement{
-                name : "Set Temperature"
+                name : "Def. Temp."
             }
             ListElement{
-                name : "Pre-Fusion Temperature"
+                name : "Temp. Pré Fusão"
             }
             ListElement{
-                name : "Fusion Temperature"
+                name : "Calib. Tensão"
             }
             ListElement{
-                name : "Fusion Duration"
-            }
-            ListElement{
-                name : "Cycle Time"
-            }
-            ListElement{
-                name : "Voltage Calibration"
-            }
-            ListElement{
-                name : "Current Calibration"
+                name : "Calib. Corrente"
             }
         }
         onCurrentIndexChanged: {
@@ -101,18 +92,9 @@ Page {
                 scaletext.text = prefusion
             }
             if ("2" == varibles.currentIndex){
-                scaletext.text = fusiontemp
-            }
-            if ("3" == varibles.currentIndex){
-                scaletext.text = fusiondur
-            }
-            if ("4" == varibles.currentIndex){
-                scaletext.text = cycle
-            }
-            if ("5" == varibles.currentIndex){
                 scaletext.text = voltage
             }
-            if ("6" == varibles.currentIndex){
+            if ("3" == varibles.currentIndex){
                 scaletext.text = current
             }
         }
@@ -140,15 +122,6 @@ Page {
             }
             if ("Pre-Fusion Temperature" == varibles.currentText){
                 prefusion = values.currentIndex
-            }
-            if ("Fusion Temperature" == varibles.currentText){
-                fusiontemp = values.currentIndex
-            }
-            if ("Fusion Duration" == varibles.currentText){
-                fusiondur = values.currentIndex
-            }
-            if ("Cycle Time" == varibles.currentText){
-                cycle = values.currentIndex
             }
             if ("Voltage Calibration" == varibles.currentText){
                 voltage = values.currentIndex

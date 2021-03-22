@@ -6,27 +6,30 @@ Page {
     Column {
     spacing: 2
         Button {
-            text: "Grafico_1"
+            text: "Gráfico 1"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page3);
             }
         }
         Button {
-            text: "Grafico_2"
+            text: "Gráfico 2"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page5);
             }
         }
         Button {
-            text: "Grafico_3"
+            text: "Gráfico 3"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page6);
@@ -175,7 +178,7 @@ Page {
 
     Label {
         id: time_elapsed
-        text: "Time elapsed: " + chart.time + "ms"
+        text: "Tempo: " + chart.time + "ms"
         font.pixelSize : 10
         x: 90
         y: 200
@@ -183,7 +186,7 @@ Page {
 
     Label {
         id: current
-        text: "Current: " + (chart.ampere).toFixed(2) + "A"
+        text: "Corrente: " + (chart.ampere).toFixed(2) + "A"
         font.pixelSize : 10
         x: 250
         y: 200
@@ -191,7 +194,7 @@ Page {
 
     Label {
         id: voltage
-        text: "Voltage: " + (chart.volt).toFixed(2) + "V"
+        text: "Tensão: " + (chart.volt).toFixed(2) + "V"
         font.pixelSize : 10
         x: 250
         y: 190

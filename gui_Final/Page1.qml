@@ -6,27 +6,30 @@ Page {
     Column {
     spacing: 2
         Button {
-            text: "Def. Param"
+            text: "Parâmetros"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page2);
             }
         }
         Button {
-            text: "Graf."
+            text: "Gráficos"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page3);
             }
         }
         Button {
-            text: "Info."
+            text: "Informações"
             width: 80
             height: 72
+            font.pixelSize : 12
 
             onClicked: {
                 mystackview.push(page4);

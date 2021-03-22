@@ -6,7 +6,7 @@ Page {
     Column {
     spacing: 2
         Button {
-            text: "Contact us"
+            text: "Contactos"
             width: 80
             height: 72
 
@@ -15,7 +15,7 @@ Page {
             }
         }
         Button {
-            text: "need help?"
+            text: "Ajuda?"
             width: 80
             height: 72
 

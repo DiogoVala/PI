@@ -21,12 +21,10 @@ ApplicationWindow {
         id: page2
         Page2 {}
     }
-
     Component {
         id: page3
         Page3 {}
     }
-
     Component {
         id: page4
         Page4 {}
