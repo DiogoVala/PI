@@ -98,7 +98,7 @@ volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period (us) of mains to be us
 
 //State machine
 sm_t SM;
-
+ 
 /*
   myTimer.begin(function, microseconds);
   myTimer.priority(number); // 0-255

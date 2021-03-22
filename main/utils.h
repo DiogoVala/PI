@@ -26,7 +26,7 @@ int GetPinVal(int pin);
    Function:    sm_power2()
    Precondition: 
    Input:      x float
-   Returns:	   x^2 
+   Returns:	   x^2  
 
    Side Effects:
 

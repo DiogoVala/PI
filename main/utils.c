@@ -3,7 +3,7 @@
    Author: Diogo Vala & Diogo Fernandes
 
    Utility functions
-*/
+*/ 
 
 #include "utils.h"
 

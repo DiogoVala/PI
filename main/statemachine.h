@@ -107,5 +107,5 @@ sm_state_t sm_get_current_state(sm_t *psm);
 
  ********************************************************************/
 void sm_execute(sm_t *psm);
-
+ 
 #endif
