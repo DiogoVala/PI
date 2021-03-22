@@ -20,6 +20,8 @@
 
 #include "statemachine.h"
 #include "statemachine.c"
+#include "utils.h"
+#include "utils.c"
 
 /**** Analog Pins ****/
 #define A0Pin 14 // Analog input 0 - Pot
@@ -40,15 +42,15 @@
 #define Zerocross 10 // Digital 8 - Passagem por zero
 
 //Uart
-static uint16_t BAUDRATE = 9600;
+const uint16_t BAUDRATE = 9600;
 
 //Sensores
-static float CURRENT_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
-static uint16_t CURRENT_K2 = 1000; // Constante de conversão do transformador de corrente
-static float VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
-static float TEMP_COEF = 0.00393; // Example of temperature coefficient
-static float R_ZERO = 0.8; //Resistance of heatband at reference temperature
-static float T_ZERO = 1; //Reference temperature
+const float CURRENT_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
+const uint16_t CURRENT_K2 = 1000; // Constante de conversão do transformador de corrente
+const float VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
+const float TEMP_COEF = 0.00393; // Example of temperature coefficient
+const float R_ZERO = 0.8; //Resistance of heatband at reference temperature
+const float T_ZERO = 1; //Reference temperature
 volatile float current = 0; // Storage of current samples
 volatile float voltage = 0; // Storage of voltage samples
 volatile uint16_t sample_count = 0; //Number of samples taken
@@ -60,10 +62,10 @@ volatile float resistance = 0; // Vrms/Irms
 volatile float setpoint = 0; // 0 to ~400º - Value defined by user
 volatile uint16_t temp_preheat = 0; // 0 to ~400º - Value defined by user
 volatile float temperature = 0; // 0 to ~400º - Calculated value from resitance
-static uint16_t PID_KP = 1; // Proportional gain of PID
-static uint16_t PID_KI = 1; // Integral gain of PID
-//static uint16_t PID_KD = 1; // Derivative gain of PID
-static uint16_t INTEGRAL_CLAMP = 1000;
+const uint16_t PID_KP = 1; // Proportional gain of PID
+const uint16_t PID_KI = 1; // Integral gain of PID
+//const uint16_t PID_KD = 1; // Derivative gain of PID
+const uint16_t INTEGRAL_CLAMP = 1000;
 volatile int64_t integral = 0; // Integral component of PID
 volatile int64_t derivative = 0; // Derivative component of PID
 volatile uint16_t duty_cycle = 0; // 0 to 4095 - PWM duty cycle for the control signal
@@ -82,14 +84,19 @@ volatile unsigned long SampleTimer = 0;
 volatile unsigned long ZeroCrossTimer = 0;
 volatile unsigned long DebounceTimer = 0;
 volatile unsigned long PrintTimer = 0;
-static uint32_t MAIN_TIMER_PERIOD = 1; // Period of main timer isr
-static uint32_t POLLING_PERIOD = 10; //  period in us. Multiplies with Main_Timer_Period
-static uint32_t SAMPLING_PERIOD = 100; //  period in us. Multiplies with Main_Timer_Period
-static uint32_t DEBOUNCE_TIME = 1000; // period in us. Multiplies with Main_Timer_Period
-static uint32_t PRINT_PERIOD = 500000; //
+volatile unsigned long ControlTimer = 0;
+const uint32_t MAIN_TIMER_PERIOD = 1; // Period of main timer isr in us
+const uint32_t POLLING_PERIOD = 10; //  period in us. Multiplies with Main_Timer_Period
+const uint32_t SAMPLING_PERIOD = 100; //  period in us. Multiplies with Main_Timer_Period
+const uint32_t DEBOUNCE_TIME = 1000; // period in us. Multiplies with Main_Timer_Period
+const uint32_t PRINT_PERIOD = 500000; // period in us.
+const uint32_t CONTROL_PERIOD = 100; // period in us.
+
+volatile bool controlflag = false; // Flag to signal that the control routine can be called
 volatile bool periodflag = false; // Flag used to measure period between every other zero crossing
 volatile uint16_t MainsPeriod = 0; //0 to ~21000 - Period (us) of mains to be used for True RMS
 
+//State machine
 sm_t SM;
 
 /*
@@ -99,12 +106,6 @@ sm_t SM;
   myTimer.end(); // Stop calling the function
 */
 
-/* DUVIDA 1
-   Esta rotina funciona com o interrupt de um dos 4 timers do teensy, a uma freq. configurável.
-   Neste contexto fiz o mesmo que fiz em SIE e usei um único timer para incrementar contadores.
-   Os contadores seríam os timers para as várias tarefas a realizar periodidamente.
-   Esta implementação está certa ou aconselha outro método?
-*/
 void _timer_ISR() {
   PollingTimer++;
   SampleTimer++;
@@ -113,14 +114,6 @@ void _timer_ISR() {
   PrintTimer++;
 }
 
-/* DUVIDA 2
-   A função execute será chamada periodicamente, mas as tarefas a executar dentro de cada estado
-   também são periódicas. Não estou a conseguir chegar a uma solução que permita a peridiocidade
-   de ambas as situações.
-   A minha única ideia foi ter um sistema de flags dentro de cada estado que sinaliza ao loop
-   principal que pode ou não executar uma certa tarefa (com recurso a ifs), mas pareceu-me
-   repetivo e faz pouco uso da estrutura da máquina de estados.
-*/
 void sm_execute(sm_t *psm) {
   /* To do:
     -transições para o estado de alarme
@@ -211,7 +204,7 @@ void sm_execute(sm_t *psm) {
       }
       else if ( event == ev_RESET)
       {
-        if (GetPinVal(EnableIO))
+        if (GetPinVal(EnableIO)==1)
         {
           /*Transition actions*/
           psm->current_state = st_ON;
@@ -238,7 +231,7 @@ void sm_execute(sm_t *psm) {
       }
       else if ( event == ev_RESET)
       {
-        if (GetPinVal(EnableIO))
+        if (GetPinVal(EnableIO)==0)
         {
           /*Transition actions*/
           psm->current_state = st_ON;
@@ -405,27 +398,14 @@ void calcTemp() {
   temperature = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);
 }
 
-/* DUVIDA 3
-   Esta forma de debounce pareceu-me a maneira mais direta e simples.
-   A função é chamada sempre que é detetada uma mudança de valor por polling.
-   O professor concorda ou é uma má prática?
-*/
 void Debounce() {
   DebounceTimer = 0;
   while (DebounceTimer < DEBOUNCE_TIME);
 }
 
-// Fetches digital pin value (used in sm_execute)
-bool GetPinVal(uint8_t pin) {
-  if (digitalRead(pin) == 1)
-    return true;
-  return false;
-}
-
-// Prints SM state
-void printState() {
+void printState(sm_t *psm) {
   Serial.print("\n\rState: ");
-  switch (sm_get_current_state(&SM)) {
+  switch (sm_get_current_state(psm)) {
     case st_OFF:
       Serial.println("OFF");
       break;
@@ -448,10 +428,6 @@ void printState() {
       Serial.println("ALARM");
       break;
   }
-}
-
-float power2(float x) {
-  return x * x;
 }
 
 void setup() {
@@ -539,7 +515,38 @@ void loop() {
     PollingTimer = 0;
   }
 
-  sm_execute(&SM);
+  //Execute state machine
+  if (SampleTimer >= SAMPLING_PERIOD)
+  {
+    sm_execute(&SM);
+  }
+  
+  //Control
+  if (ControlTimer >= CONTROL_PERIOD && controlflag == true)
+  {
+    setTemp();
+    ControlTimer = 0;
+  }
+  //Sampling
+  if (SampleTimer >= SAMPLING_PERIOD)
+  {
+    current += power2(sampleCurrent());
+    voltage += power2(sampleVoltage());
+    sample_count++;
+    SampleTimer = 0;
+  }
+  //Priting
+  if (PrintTimer >= PRINT_PERIOD) {
+    Serial.print("\r\x1b[2J"); //Clear screen
+    printState(&SM);
+    Serial.print("Tensao RMS: ");
+    Serial.println(voltageRMS);
+    Serial.print("CorrenteRMS : ");
+    Serial.println(currentRMS);
+    Serial.print("Temperatura: ");
+    Serial.println(temperature);
+    PrintTimer = 0;
+  }
 
   // Keyboard Simulation to test state machine
   uint8_t incomingByte = 0;
@@ -589,26 +596,4 @@ void loop() {
         break;
     }
   }
-  
-  //Sampling
-  if (SampleTimer >= SAMPLING_PERIOD)
-  {
-    current += power2(sampleCurrent());
-    voltage += power2(sampleVoltage());
-    sample_count++;
-    SampleTimer = 0;
-  }
-  //Priting
-  if (PrintTimer >= PRINT_PERIOD) {
-    Serial.print("\r\x1b[2J"); //Clear screen
-    printState();
-    Serial.print("Tensao RMS: ");
-    Serial.println(voltageRMS);
-    Serial.print("CorrenteRMS : ");
-    Serial.println(currentRMS);
-    Serial.print("Temperatura: ");
-    Serial.println(temperature);
-    PrintTimer = 0;
-  }
-
 }

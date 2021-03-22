@@ -45,8 +45,6 @@ typedef struct sm_t
   sm_event_t last_event;
 } sm_t;
 
-//extern sm_t SM;
-
 /********************************************************************
    Function:    sm_init()
    Precondition: Define sm_state_t and sm_event_t structs
