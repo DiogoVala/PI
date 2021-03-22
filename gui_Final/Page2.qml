@@ -117,20 +117,19 @@ Page {
         text: "Validar"
         onClicked: {
             scaletext.text = values.currentIndex
-            if ("Set Temperature" == varibles.currentText){
+            if ("Def. Temp." == varibles.currentText){
                 temperature = values.currentIndex
             }
-            if ("Pre-Fusion Temperature" == varibles.currentText){
+            if ("Temp. Pré Fusão" == varibles.currentText){
                 prefusion = values.currentIndex
             }
-            if ("Voltage Calibration" == varibles.currentText){
+            if ("Calib. Tensão" == varibles.currentText){
                 voltage = values.currentIndex
             }
-            if ("Current Calibration" == varibles.currentText){
+            if ("Calib. Corrente" == varibles.currentText){
                 current = values.currentIndex
             }
         }
     }
 
 }
-
