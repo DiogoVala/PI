@@ -4,23 +4,10 @@
 
    Utility functions
 */
+#include <stdbool.h>
 
 #ifndef UTILS_H
 #define UTILS_H
-
-/********************************************************************
-   Function:    sm_GetPinVal()
-   Precondition: Pin should be configured as input
-   Input:      pin number
-   Returns:	   1 if pin is HIGH; 0 if pin is LOW
-
-   Side Effects:
-
-   Overview:     Fetches pin state
-
-   Note:
- ********************************************************************/
-int GetPinVal(int pin);
 
 /********************************************************************
    Function:    sm_power2()
