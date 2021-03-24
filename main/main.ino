@@ -72,7 +72,7 @@ volatile uint16_t temp_user_setpoint = 0; // 0 to ~400º - setpoint to be define
 volatile uint16_t temp_preheat = 0; // 0 to ~400º - Value defined by user
 volatile uint16_t temp_measured = 0; // 0 to ~400º - Calculated value from resitance
 volatile uint16_t temp_error_old = 0; // 0 to ~400º - Old error for derivative component
-const uint8_t temp_tolerance = 1; // 1ºC - Tolerance for temperature control
+const uint16_t MAX_TEMP = 300;
 const uint16_t PID_KP = 1; // Proportional gain of PID
 const uint16_t PID_KI = 1; // Integral gain of PID
 const uint16_t PID_KD = 1; // Derivative gain of PID
@@ -101,15 +101,16 @@ volatile unsigned long timer_execute_sm = 0;
 //Periods
 const uint32_t PERIOD_MAIN_TIMER = 1000; // Period of main timer isr in us
 const uint32_t PERIOD_POLLING = 1000000; //  period in us. 
-const uint32_t PERIOD_SAMPLING = 1000000; //  period in us.
+const uint32_t PERIOD_SAMPLING = 100; //  period in us.
 const uint32_t PERIOD_DEBOUNCE = 1000; // period in us. 
-const uint32_t PERIOD_PRINT = 1000000; // period in us.
+const uint32_t PERIOD_PRINT = 100; // period in us.
 const uint32_t PERIOD_CONTROL = 1000000; // period in us.
-const uint32_t PERIOD_SM_EXECUTE = 1000000; // period in us.
+const uint32_t PERIOD_SM_EXECUTE = 1; // period in us.
 
 //flags
 volatile bool flag_control = false; // Flag to signal that the control routine can be called
-volatile bool flag_sampling = false; // Flag to signal that the control routine can be called
+volatile bool flag_sampling = false; // Flag to signal that the sampling routine can be called
+volatile bool flag_pot_read = false; // Flag to signal that the potentiometre can be read
 volatile bool flag_period = false; // Flag used to measure period between every other zero crossing
 
 
@@ -214,7 +215,8 @@ void ZEROCROSS() {
   {
     voltage_rms = sqrt(voltage / sample_count);
     current_rms = sqrt(current / sample_count);
-    calcTemp();
+    resistance = voltage_rms / current_rms;
+    temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);
     sample_count = 0;
     voltage = 0;
     current = 0;
@@ -269,12 +271,6 @@ float sampleVoltage() {
   sample = sample - 1650; // [-1650 , 1650] V
   sample = sample * VOLTAGE_K1 / 1000; // [-1.650 , 1.650] * K = [-67.881 , 67.881] V
   return sample;
-}
-
-// Calculates the temperature at the load
-void calcTemp() {
-  resistance = voltage_rms / current_rms;
-  temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);
 }
 
 void Debounce() {
@@ -443,9 +439,11 @@ void loop() {
     timer_polling = 0;
   }
 
+
   //Execute state machine
   if (timer_execute_sm >= PERIOD_SM_EXECUTE)
   {
+    sm_next_event(&state_machine);
     sm_execute(&state_machine);
     timer_execute_sm=0;
     //Serial.print("\rExecute\n");
@@ -454,6 +452,11 @@ void loop() {
   //Sampling
   if (timer_sampling >= PERIOD_SAMPLING && flag_sampling == true)
   {
+    if(flag_pot_read == true)
+    {
+      temp_user_setpoint=analogRead(ANALOGpin_pot)*300/(1<<ADC_RESOLUTION); // Read pot value
+    }
+    Serial.println(temp_user_setpoint);
     current += power2(sampleCurrent());
     voltage += power2(sampleVoltage());
     sample_count++;
@@ -472,7 +475,7 @@ void loop() {
   {
     analogWrite(CTRLpin_PWM, 0); //Might be MAX_DUTY_CYCLE if logic is inverted: Set controller to minimum power
   }
-  
+#if 0
   //Priting
   if (timer_print >= PERIOD_PRINT) {
     Serial.print("\r\x1b[2J"); //Clear screen
@@ -485,7 +488,7 @@ void loop() {
     Serial.println(temp_measured);
     timer_print = 0;
   }
-
+#endif
   // Keyboard Simulation to test state machine
   uint8_t incomingByte = 0;
   if (Serial.available() > 0) {
