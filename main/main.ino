@@ -5,14 +5,13 @@
    Overview: Termorregulador Digital
 */
 /*TO DO
+    -Polling do potenciómetro
     -Terminar a função sm_execute()
-      -transições para o estado de alarme
-      -transição do estado de alarme para a iniciação do sistema (reset)
-      -ações de cada estado
-      -ações de transição
     -Device driver - Ethernet
     -Device driver - Display
     -Debouncer está com busy waiting
+    -Como fazer seleção entre potenciómetro, display e ethernet
+    -Error handling
 */
 
 #include "statemachine.h"
@@ -38,6 +37,9 @@
 #define CTRLpin_OnOff 9 // Digital 7 - Controller On/Off
 #define CTRLpin_zerocross 10 // Digital 8 - Passagem por zero
 
+//General defs
+#define LOW 0
+#define HIGH 1
 
 //Uart
 const uint16_t BAUD_RATE = 9600;
@@ -70,12 +72,13 @@ volatile uint16_t temp_user_setpoint = 0; // 0 to ~400º - setpoint to be define
 volatile uint16_t temp_preheat = 0; // 0 to ~400º - Value defined by user
 volatile uint16_t temp_measured = 0; // 0 to ~400º - Calculated value from resitance
 volatile uint16_t temp_error_old = 0; // 0 to ~400º - Old error for derivative component
+const uint8_t temp_tolerance = 1; // 1ºC - Tolerance for temperature control
 const uint16_t PID_KP = 1; // Proportional gain of PID
 const uint16_t PID_KI = 1; // Integral gain of PID
 const uint16_t PID_KD = 1; // Derivative gain of PID
 const uint16_t INTEGRAL_CLAMP = 1000;
 volatile int64_t integral = 0; // Integral component of PID
-volatile int64_t derivative = 0; // Derivative component of PID
+volatile int32_t derivative = 0; // Derivative component of PID
 volatile uint16_t duty_cycle = 0; // 0 to 4095 - PWM duty cycle for the control signal
 
 //Old state of input signals for polling
@@ -96,7 +99,7 @@ volatile unsigned long timer_control = 0;
 volatile unsigned long timer_execute_sm = 0;
 
 //Periods
-const uint32_t PERIOD_MAIN_TIMER = 1; // Period of main timer isr in us
+const uint32_t PERIOD_MAIN_TIMER = 1000; // Period of main timer isr in us
 const uint32_t PERIOD_POLLING = 1000000; //  period in us. 
 const uint32_t PERIOD_SAMPLING = 1000000; //  period in us.
 const uint32_t PERIOD_DEBOUNCE = 1000; // period in us. 
@@ -106,7 +109,9 @@ const uint32_t PERIOD_SM_EXECUTE = 1000000; // period in us.
 
 //flags
 volatile bool flag_control = false; // Flag to signal that the control routine can be called
+volatile bool flag_sampling = false; // Flag to signal that the control routine can be called
 volatile bool flag_period = false; // Flag used to measure period between every other zero crossing
+
 
 //State machine
 sm_t state_machine;
@@ -123,164 +128,81 @@ void _timer_ISR() {
 
 void sm_execute(sm_t *psm) {
   /* To do:
-    -transições para o estado de alarme
-    -transição do estado de alarme para a iniciação do sistema (reset)
     -ações de cada estado
-    -ações de transição
   */
-  sm_event_t sm_event = psm->last_event;
-
   switch (sm_get_current_state(psm))
   {
     /*************** OFF ***************/
     case st_OFF:
       /* State Actions*/
-    if (sm_event == ev_ENABLE_HIGH)
-    {
-        /*Transition actions*/
-      psm->current_state = st_ON;
-    }
+    digitalWrite(IOpin_alarm, LOW);
+    digitalWrite(CTRLpin_OnOff, LOW);
+    flag_sampling=false;
+    flag_control=false;
     break;
 
     /*************** ON ***************/
     case st_ON:
-      /* State Actions*/
-    if (sm_event == ev_ENABLE_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_OFF;
-    }
-    else if (sm_event == ev_START_HIGH)
-    {
-        /*Transition actions*/
-      psm->current_state = st_CYCLESTART;
-    }
+        /* State Actions*/
+    digitalWrite(IOpin_alarm, HIGH);
+    digitalWrite(CTRLpin_OnOff, LOW);
+    flag_sampling=true;
+    flag_control=false;
     break;
 
     /************ CYCLESTART ************/
     case st_CYCLESTART:
       /* State Actions*/
-    if (sm_event == ev_START_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_ON;
-    }
-    else if (sm_event == ev_PREHEAT_HIGH)
-    {
-        /*Transition actions*/
-      psm->current_state = st_PREHEATING;
-    }
-    else if ( sm_event == ev_SEALING_HIGH)
-    {
-        /*Transition actions*/
-      psm->current_state = st_RAISETEMP;
-    }
-    else if (sm_event == ev_ENABLE_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_OFF;
-    }
-    else if ( sm_event == ev_RESET)
-    {
-      if (GetPinVal(IOpin_enable))
-      {
-          /*Transition actions*/
-        psm->current_state = st_ON;
-      }
-      else
-      {
-          /*Transition actions*/
-        psm->current_state = st_OFF;
-      }
-    }
+    digitalWrite(IOpin_alarm, HIGH);
+    digitalWrite(CTRLpin_OnOff, LOW);
+    flag_sampling=true;
+    flag_control=false;
     break;
+
     /************ PREHEATING ************/
     case st_PREHEATING:
       /* State Actions*/
-    if (sm_event == ev_PREHEAT_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_CYCLESTART;
-    }
-    else if (sm_event == ev_SEALING_HIGH)
-    {
-        /*Transition actions*/
-      psm->current_state = st_RAISETEMP;
-    }
-    else if (sm_event == ev_ENABLE_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_OFF;
-    }
-    else if ( sm_event == ev_RESET)
-    {
-      if (GetPinVal(IOpin_enable))
-      {
-          /*Transition actions*/
-        psm->current_state = st_ON;
-      }
-      else
-      {
-          /*Transition actions*/
-        psm->current_state = st_OFF;
-      }
-    }
+    digitalWrite(IOpin_alarm, HIGH);
+    digitalWrite(CTRLpin_OnOff, HIGH);
+    flag_sampling=true;
+    flag_control=true;
+    temp_setpoint=temp_preheat;
     break;
-    /************ RAISETEMP ************/
+#if 0
+    /************ RAISETEMP *************/
     case st_RAISETEMP:
       /* State Actions*/
-    if (sm_event == ev_TEMPSET)
-    {
-        /*Transition actions*/
-      psm->current_state = st_SEAL;
-    }
-    else if (sm_event == ev_ENABLE_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_OFF;
-    }
-    else if ( sm_event == ev_RESET)
-    {
-      if (GetPinVal(IOpin_enable))
-      {
-          /*Transition actions*/
-        psm->current_state = st_ON;
-      }
-      else
-      {
-          /*Transition actions*/
-        psm->current_state = st_OFF;
-      }
-    }
+    digitalWrite(IOpin_alarm, HIGH);
+    digitalWrite(CTRLpin_OnOff, HIGH);
+    flag_sampling=true;
+    flag_control=true;
+    temp_setpoint=temp_user_setpoint;
     break;
-
+#endif
+    /************* SEALING **************/
     case st_SEAL:
       /* State Actions*/
-    if (sm_event == ev_SEALING_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_CYCLESTART;
-    }
-    else if (sm_event == ev_ENABLE_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_OFF;
-    }
-    else if ( sm_event == ev_RESET)
-    {
-      if (GetPinVal(IOpin_enable))
-      {
-        psm->current_state = st_ON;
-      }
-      else
-      {
-        psm->current_state = st_OFF;
-      }
-    }
+    digitalWrite(IOpin_alarm, HIGH);
+    digitalWrite(CTRLpin_OnOff, HIGH);
+    flag_sampling=true;
+    flag_control=true;
+    temp_setpoint=temp_user_setpoint;
     break;
+
+    /************* ALARM **************/
     case st_ALARM:
+      /* State Actions*/
+    digitalWrite(IOpin_alarm, LOW);
+    digitalWrite(CTRLpin_OnOff, LOW);
+    flag_sampling=false;
+    flag_control=false;
     break;
     default:
+      /* State Actions*/
+    digitalWrite(IOpin_alarm, LOW);
+    digitalWrite(CTRLpin_OnOff, LOW);
+    flag_sampling=false;
+    flag_control=false;
     break;
   }
 }
@@ -288,7 +210,7 @@ void sm_execute(sm_t *psm) {
 // External ISR to measure the 230Vac period
 void ZEROCROSS() {
 
-  if (digitalRead(CTRLpin_zerocross) == 1 && flag_period == false)
+  if (digitalRead(CTRLpin_zerocross) == HIGH && flag_period == false)
   {
     voltage_rms = sqrt(voltage / sample_count);
     current_rms = sqrt(current / sample_count);
@@ -298,7 +220,7 @@ void ZEROCROSS() {
     current = 0;
     flag_period = true;
   }
-  else if ( digitalRead(CTRLpin_zerocross) == 1 && flag_period == true)
+  else if ( digitalRead(CTRLpin_zerocross) == HIGH && flag_period == true)
   {
     flag_period = false;
   }
@@ -309,7 +231,7 @@ void setTemp(uint16_t setpoint) {
   uint16_t new_duty_cycle = duty_cycle;
   int16_t temp_error = temp_measured - setpoint;
 
-  derivative=(temp_error-temp_error_old)/PERIOD_CONTROL;
+  derivative=(temp_error-temp_error_old);
 
   integral += temp_error;
   if (integral > INTEGRAL_CLAMP) integral = INTEGRAL_CLAMP; // Positive clamping to avoid wind-up
@@ -332,10 +254,10 @@ void setTemp(uint16_t setpoint) {
 float sampleCurrent() {
   float sample = 0;
   sample = analogRead(ANALOGpin_current);
-  sample = sample * 3300 / 4095;
-  sample = sample - 1650;
-  sample = sample / CURRENT_K1;
-  sample = sample * CURRENT_K2 / 1000;
+  sample = sample * 3300 / (1<<ADC_RESOLUTION); // [0 , 3300] V
+  sample = sample - 1650; // [-1650 , 1650] V 
+  sample = sample / CURRENT_K1; // [-56 , 56] mAmps
+  sample = sample * CURRENT_K2 / 1000; // [-56 , 56]*1000/1000 = [-56, 56]Amps
   return sample;
 }
 
@@ -343,9 +265,9 @@ float sampleCurrent() {
 float sampleVoltage() {
   float sample = 0;
   sample = analogRead(ANALOGpin_voltage);
-  sample = sample * 3300 / 4095;
-  sample = sample - 1650;
-  sample = sample * VOLTAGE_K1 / 1000;
+  sample = sample * 3300 / (1<<ADC_RESOLUTION); // [0 , 3300] V
+  sample = sample - 1650; // [-1650 , 1650] V
+  sample = sample * VOLTAGE_K1 / 1000; // [-1.650 , 1.650] * K = [-67.881 , 67.881] V
   return sample;
 }
 
@@ -388,13 +310,12 @@ void printState(sm_t *psm) {
 }
 
 bool GetPinVal(int pin) {
-  if (digitalRead(pin) == 1)
+  if (digitalRead(pin) == HIGH)
     return true;
   return false;
 }
 
-void ErrorHandler(int8_t error_code)
-{
+void ErrorHandler(int8_t error_code){
   switch(error_code){
     default:
     Serial.print("Error");
@@ -438,7 +359,7 @@ void setup() {
 
   //PWM initialization
   analogWriteResolution(PWM_RESOLUTION); // With 12 bits, the frequency is 36621.09 Hz (teensy 4.1 doc)
-  analogWrite(CTRLpin_PWM, 0); // Power controller control signal
+  analogWrite(CTRLpin_PWM, LOW); // Power controller control signal
 
   //Start Timer ISR
   MainTimer.begin(_timer_ISR, PERIOD_MAIN_TIMER);
@@ -452,13 +373,13 @@ void setup() {
 void loop() {
 
   // Polling
-  if (timer_polling >= PERIOD_POLLING) //Talvez seja melhor correr isto à frequência máxima?
+  if (timer_polling >= PERIOD_POLLING)
   {
     // Reset pin
-    if (digitalRead(IOpin_reset) == 1 && reset_state == 0)
+    if (digitalRead(IOpin_reset) == HIGH && reset_state == LOW)
     {
       reset_state = digitalRead(IOpin_reset);
-      if (reset_state == 1)
+      if (reset_state == HIGH)
       {
         sm_send_event(&state_machine, ev_RESET);
       }
@@ -468,7 +389,7 @@ void loop() {
     {
       Debounce();
       enable_state = digitalRead(IOpin_enable);
-      if (enable_state == 0)
+      if (enable_state == LOW)
       {
         sm_send_event(&state_machine, ev_ENABLE_LOW);
       }
@@ -482,7 +403,7 @@ void loop() {
     {
       Debounce();
       start_state = digitalRead(IOpin_start);
-      if (start_state == 0)
+      if (start_state == LOW)
       {
         sm_send_event(&state_machine, ev_START_LOW);
       }
@@ -496,7 +417,7 @@ void loop() {
     {
       Debounce();
       preheat_state = digitalRead(IOpin_preheat);
-      if (preheat_state == 0)
+      if (preheat_state == LOW)
       {
         sm_send_event(&state_machine, ev_PREHEAT_LOW);
       }
@@ -510,7 +431,7 @@ void loop() {
     {
       Debounce();
       sealing_state = digitalRead(IOpin_sealing);
-      if (sealing_state == 0)
+      if (sealing_state == LOW)
       {
         sm_send_event(&state_machine, ev_SEALING_LOW);
       }
@@ -530,6 +451,16 @@ void loop() {
     //Serial.print("\rExecute\n");
   }
   
+  //Sampling
+  if (timer_sampling >= PERIOD_SAMPLING && flag_sampling == true)
+  {
+    current += power2(sampleCurrent());
+    voltage += power2(sampleVoltage());
+    sample_count++;
+    timer_sampling = 0;
+    //Serial.print("\rSampling\n");
+  }
+
   //Control
   if (timer_control >= PERIOD_CONTROL && flag_control == true)
   {
@@ -537,15 +468,9 @@ void loop() {
     timer_control = 0;
     //Serial.print("\rControl\n");
   }
-  
-  //Sampling
-  if (timer_sampling >= PERIOD_SAMPLING)
+  else if (timer_control >= PERIOD_CONTROL && flag_control == false)
   {
-    current += power2(sampleCurrent());
-    voltage += power2(sampleVoltage());
-    sample_count++;
-    timer_sampling = 0;
-    //Serial.print("\rSampling\n");
+    analogWrite(CTRLpin_PWM, 0); //Might be MAX_DUTY_CYCLE if logic is inverted: Set controller to minimum power
   }
   
   //Priting

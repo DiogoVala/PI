@@ -94,18 +94,36 @@ sm_state_t sm_get_current_state(sm_t *psm);
 
 /********************************************************************
    Function:    sm_execute()
-   Precondition:
+   Precondition: states and events should be defined;
+                 state machine should be initiated
 
    Input:      *psm (Pointer to sm_t)
    Returns:
 
    Side Effects:
 
-   Overview:   Manages the state machine
+   Overview:   Runs tasks inside states
 
    Note:       Should be manually added in main file
 
  ********************************************************************/
 void sm_execute(sm_t *psm);
  
+/********************************************************************
+   Function:    sm_next_event()
+   Precondition: states and events should be defined;
+                 state machine should be initiated
+
+   Input:      *psm (Pointer to sm_t)
+   Returns:
+
+   Side Effects:
+
+   Overview:   Handles events and changes states
+
+   Note:       
+
+ ********************************************************************/
+void sm_next_event(sm_t *psm);
+
 #endif
