@@ -52,13 +52,13 @@ const uint16_t MIN_DUTY_CYCLE = 0;
 
 //Sensores
 const uint16_t CURRENT_K1 = 29464; // Constante de conversão de corrente em tensão do circuito de condicionamento ( 29.464*1000 )
-const float VOLTAGE_K1 = 4114; // Constante do divisor resistivo do circuito de condicionamento (41.14*100)
+const uint16_t VOLTAGE_K1 = 4114; // Constante do divisor resistivo do circuito de condicionamento (41.14*100)
 const float TEMP_COEF = 0.00393; // Example of temperature coefficient
 const float R_ZERO = 0.8; //Resistance of heatband at reference temperature
 const float T_ZERO = 1; //Reference temperature
 volatile uint16_t sample_count = 0; //Number of samples taken
-volatile float current = 0; // Storage of current samples
-volatile float voltage = 0; // Storage of voltage samples
+volatile int32_t current = 0; // Storage of current samples
+volatile int32_t voltage = 0; // Storage of voltage samples
 volatile float current_rms = 0; // True RMS current
 volatile float voltage_rms = 0; // True RMS voltage
 volatile float resistance = 0; // Vrms/Irms
