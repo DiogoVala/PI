@@ -436,7 +436,6 @@ void loop() {
     timer_polling = 0;
   }
 
-
   //Execute state machine
   if (timer_execute_sm >= PERIOD_SM_EXECUTE)
   {
@@ -453,11 +452,16 @@ void loop() {
     {
       temp_user_setpoint=(analogRead(ANALOGpin_pot)*MAX_TEMP)>>ADC_RESOLUTION ; // Read pot value
     }
+    /*Note: How to handle critial sections?*/
     Serial.println(temp_user_setpoint);
-    current += power2(sampleCurrent());
-    voltage += power2(sampleVoltage());
+    uint32_t temp;
+    temp=sampleCurrent();
+    current += temp*temp;
+    temp=sampleVoltage();
+    voltage += temp*temp;
     sample_count++;
     timer_sampling = 0;
+
     //Serial.print("\rSampling\n");
   }
 
