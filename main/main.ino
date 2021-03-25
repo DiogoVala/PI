@@ -11,6 +11,7 @@
     -Debouncer está com busy waiting
     -Como fazer seleção entre potenciómetro, display e ethernet
     -Error handling
+    -Optimize variables (reduce number of floats)
 */
 
 #include "statemachine.h"
@@ -39,10 +40,10 @@
 #define HIGH 1
 
 //Uart
-const uint16_t BAUD_RATE = 9600;
+#define BAUD_RATE 9600
 
 //ADC
-const uint8_t ADC_RESOLUTION = 12; // 12 bit resolution
+#define ADC_RESOLUTION 12 // 12 bit resolution
 
 //PWM
 const uint8_t PWM_RESOLUTION = 12; // 12 bit resolution
@@ -50,9 +51,8 @@ const uint16_t MAX_DUTY_CYCLE = (1 << PWM_RESOLUTION) - 1;
 const uint16_t MIN_DUTY_CYCLE = 0;
 
 //Sensores
-const float CURRENT_K1 = 29.4643; // Constante de conversão de corrente em tensão do circuito de condicionamento
-const uint16_t CURRENT_K2 = 1000; // Constante de conversão do transformador de corrente
-const float VOLTAGE_K1 = 41.14; // Constante do divisor resistivo do circuito de condicionamento
+const uint16_t CURRENT_K1 = 29464; // Constante de conversão de corrente em tensão do circuito de condicionamento ( 29.464*1000 )
+const float VOLTAGE_K1 = 4114; // Constante do divisor resistivo do circuito de condicionamento (41.14*100)
 const float TEMP_COEF = 0.00393; // Example of temperature coefficient
 const float R_ZERO = 0.8; //Resistance of heatband at reference temperature
 const float T_ZERO = 1; //Reference temperature
@@ -87,13 +87,13 @@ volatile uint8_t reset_state;
 
 //Timers
 IntervalTimer MainTimer; // Interrupt timer
-volatile unsigned long timer_polling = 0;
-volatile unsigned long timer_sampling = 0;
-volatile unsigned long timer_zerocross = 0;
-volatile unsigned long timer_debounce = 0;
-volatile unsigned long timer_print = 0;
-volatile unsigned long timer_control = 0;
-volatile unsigned long timer_execute_sm = 0;
+volatile uint32_t timer_polling = 0;
+volatile uint32_t timer_sampling = 0;
+volatile uint32_t timer_zerocross = 0;
+volatile uint32_t timer_debounce = 0;
+volatile uint32_t timer_print = 0;
+volatile uint32_t timer_control = 0;
+volatile uint32_t timer_execute_sm = 0;
 
 //Periods
 const uint32_t PERIOD_MAIN_TIMER = 1000; // Period of main timer isr in us
@@ -251,22 +251,22 @@ void setTemp(uint16_t setpoint) {
 
 // Samples ADC value for current and processes the data
 float sampleCurrent() {
-  float sample = 0;
+
+  int32_t sample = 0;
   sample = analogRead(ANALOGpin_current);
-  sample = sample * 3300 / (1<<ADC_RESOLUTION); // [0 , 3300] V
-  sample = sample - 1650; // [-1650 , 1650] V 
-  sample = sample / CURRENT_K1; // [-56 , 56] mAmps
-  sample = sample * CURRENT_K2 / 1000; // [-56 , 56]*1000/1000 = [-56, 56]Amps
+  sample = (sample * 33000000)>>ADC_RESOLUTION; // [0 , 33000000] V
+  sample = sample - 16500000; // [-16500000 , 16500000] V 
+  sample = sample / CURRENT_K1; // [-16500000 , 16500000] / 2946 = [-5600 , 5600] Amps*100
   return sample;
 }
 
 // Samples ADC value for voltage and processes the data
 float sampleVoltage() {
-  float sample = 0;
+  int32_t sample = 0;;
   sample = analogRead(ANALOGpin_voltage);
-  sample = sample * 3300 / (1<<ADC_RESOLUTION); // [0 , 3300] V
-  sample = sample - 1650; // [-1650 , 1650] V
-  sample = sample * VOLTAGE_K1 / 1000; // [-1.650 , 1.650] * K = [-67.881 , 67.881] V
+  sample = (sample * 330000)>>ADC_RESOLUTION; // [0 , 330000] V
+  sample = sample - 165000; // [-165000 , 165000] V 
+  sample = sample * VOLTAGE_K1 / 100000; // [-165000 , 165000] V  * 4114 / 100000 = [-6788 , 6788] V*100
   return sample;
 }
 
@@ -451,7 +451,7 @@ void loop() {
   {
     if(flag_pot_read == true)
     {
-      temp_user_setpoint=analogRead(ANALOGpin_pot)*300/(1<<ADC_RESOLUTION); // Read pot value
+      temp_user_setpoint=(analogRead(ANALOGpin_pot)*MAX_TEMP)>>ADC_RESOLUTION ; // Read pot value
     }
     Serial.println(temp_user_setpoint);
     current += power2(sampleCurrent());
