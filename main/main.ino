@@ -5,7 +5,6 @@
    Overview: Termorregulador Digital
 */
 /*TO DO
-    -Polling do potenciómetro
     -Terminar a função sm_execute()
     -Device driver - Ethernet
     -Device driver - Display
@@ -15,9 +14,7 @@
 */
 
 #include "statemachine.h"
-//#include "statemachine.c"
 #include "utils.h"
-//#include "utils.c"
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14 // Analog input 0 - Pot
