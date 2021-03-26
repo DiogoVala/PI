@@ -15,7 +15,6 @@
 */
 
 #include "statemachine.h"
-#include "utils.h"
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14 /* Analog input 0 - Pot*/
@@ -275,6 +274,7 @@ void Debounce() {
   while (timer_debounce < PERIOD_DEBOUNCE);
 }
 
+/*Function not needed in final product*/
 void printState(sm_t *psm) {
   Serial.print("\n\rState: ");
   switch (sm_get_current_state(psm)) {
