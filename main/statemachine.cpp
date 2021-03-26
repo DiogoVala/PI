@@ -72,7 +72,7 @@ void sm_next_event(sm_t *psm) {
     else if ( sm_event == ev_SEALING_HIGH)
     {
         /*Transition actions*/
-      //psm->current_state = st_RAISETEMP;
+      /*psm->current_state = st_RAISETEMP;*/
       psm->current_state = st_SEAL;
     }
     else if (sm_event == ev_ENABLE_LOW)
@@ -95,7 +95,7 @@ void sm_next_event(sm_t *psm) {
     else if (sm_event == ev_SEALING_HIGH)
     {
         /*Transition actions*/
-      //psm->current_state = st_RAISETEMP;
+      /*psm->current_state = st_RAISETEMP;*/
     	psm->current_state = st_SEAL;
     }
     else if (sm_event == ev_ENABLE_LOW)

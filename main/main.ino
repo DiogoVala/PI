@@ -18,75 +18,75 @@
 #include "utils.h"
 
 /**** Analog Pins ****/
-#define ANALOGpin_pot 14 // Analog input 0 - Pot
-#define ANALOGpin_current 15 // Analog input 1 - Current
-#define ANALOGpin_voltage 16 // Analog input 2 - Voltage
+#define ANALOGpin_pot 14 /* Analog input 0 - Pot
+#define ANALOGpin_current 15 /* Analog input 1 - Current
+#define ANALOGpin_voltage 16 /* Analog input 2 - Voltage
 
 /**** Digital Pins ****/
-//PLC Signals
-#define IOpin_enable 2 // Digital 0 - Enable
-#define IOpin_start 3 // Digital 1 - Start
-#define IOpin_preheat 4 // Digital 2 - Pre-heat
-#define IOpin_sealing 5 // Digital 3 - Sealing
-#define IOpin_reset 6 // Digital 4 - Reset
-#define IOpin_alarm 7 // Digital 5 - Alarm
-//Control signals
-#define CTRLpin_PWM 8 // Digital 6 - PWM output for controller
-#define CTRLpin_OnOff 9 // Digital 7 - Controller On/Off
-#define CTRLpin_zerocross 10 // Digital 8 - Passagem por zero
+/*PLC Signals*/
+#define IOpin_enable 2 /* Digital 0 - Enable */
+#define IOpin_start 3 /* Digital 1 - Start */
+#define IOpin_preheat 4 /* Digital 2 - Pre-heat */
+#define IOpin_sealing 5 /* Digital 3 - Sealing */
+#define IOpin_reset 6 /* Digital 4 - Reset */
+#define IOpin_alarm 7 /* Digital 5 - Alarm */
+/*Control signals*/
+#define CTRLpin_PWM 8 /* Digital 6 - PWM output for controller */
+#define CTRLpin_OnOff 9 /* Digital 7 - Controller On/Off */
+#define CTRLpin_zerocross 10 /* Digital 8 - Passagem por zero */
 
-//General defs
+/*General defs*/
 #define LOW 0
 #define HIGH 1
 
-//Uart
+/*Uart*/
 #define BAUD_RATE 9600
 
-//ADC
-#define ADC_RESOLUTION 12 // 12 bit resolution
+/*ADC*/
+#define ADC_RESOLUTION 12 /* 12 bit resolution
 
-//PWM
-const uint8_t PWM_RESOLUTION = 12; // 12 bit resolution
+/*PWM*/
+const uint8_t PWM_RESOLUTION = 12; /* 12 bit resolution
 const uint16_t MAX_DUTY_CYCLE = (1 << PWM_RESOLUTION) - 1;
 const uint16_t MIN_DUTY_CYCLE = 0;
 
-//Sensores
-const uint16_t CURRENT_K1 = 29464; // Constante de conversão de corrente em tensão do circuito de condicionamento ( 29.464*1000 )
-const uint16_t VOLTAGE_K1 = 4114; // Constante do divisor resistivo do circuito de condicionamento (41.14*100)
-const float TEMP_COEF = 0.00393; // Example of temperature coefficient
-const float R_ZERO = 0.8; //Resistance of heatband at reference temperature
-const float T_ZERO = 1; //Reference temperature
-volatile uint16_t sample_count = 0; //Number of samples taken
-volatile int32_t current = 0; // Storage of current samples
-volatile int32_t voltage = 0; // Storage of voltage samples
-volatile float current_rms = 0; // True RMS current
-volatile float voltage_rms = 0; // True RMS voltage
-volatile float resistance = 0; // Vrms/Irms
+/*Sensores*/
+const uint16_t CURRENT_K1 = 29464; /* Constante de conversão de corrente em tensão do circuito de condicionamento ( 29.464*1000 )*/
+const uint16_t VOLTAGE_K1 = 4114; /* Constante do divisor resistivo do circuito de condicionamento (41.14*100)*/
+const float TEMP_COEF = 0.00393; /* Example of temperature coefficient*/
+const float R_ZERO = 0.8; /*Resistance of heatband at reference temperature*/
+const float T_ZERO = 1; /*Reference temperature*/
+volatile uint16_t sample_count = 0; /*Number of samples taken*/
+volatile int32_t current = 0; /* Storage of current samples*/
+volatile int32_t voltage = 0; /* Storage of voltage samples*/
+volatile float current_rms = 0; /* True RMS current*/
+volatile float voltage_rms = 0; /* True RMS voltage*/
+volatile float resistance = 0; /* Vrms/Irms*/
 
-//Controlo
-volatile uint16_t temp_setpoint = 0; // 0 to ~400º - setpoint to be applied to control routine
-volatile uint16_t temp_user_setpoint = 0; // 0 to ~400º - setpoint to be defined by user
-volatile uint16_t temp_preheat = 0; // 0 to ~400º - Value defined by user
-volatile uint16_t temp_measured = 0; // 0 to ~400º - Calculated value from resitance
-volatile uint16_t temp_error_old = 0; // 0 to ~400º - Old error for derivative component
+/*Controlo*/
+volatile uint16_t temp_setpoint = 0; /* 0 to ~400º - setpoint to be applied to control routine*/
+volatile uint16_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
+volatile uint16_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
+volatile uint16_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
+volatile uint16_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
 const uint16_t MAX_TEMP = 300;
-const uint16_t PID_KP = 1; // Proportional gain of PID
-const uint16_t PID_KI = 1; // Integral gain of PID
-const uint16_t PID_KD = 1; // Derivative gain of PID
+const uint16_t PID_KP = 1; /* Proportional gain of PID*/
+const uint16_t PID_KI = 1; /* Integral gain of PID*/
+const uint16_t PID_KD = 1; /* Derivative gain of PID*/
 const uint16_t INTEGRAL_CLAMP = 1000;
-volatile int64_t integral = 0; // Integral component of PID
-volatile int32_t derivative = 0; // Derivative component of PID
-volatile uint16_t duty_cycle = 0; // 0 to 4095 - PWM duty cycle for the control signal
+volatile int64_t integral = 0; /* Integral component of PID*/
+volatile int32_t derivative = 0; /* Derivative component of PID*/
+volatile uint16_t duty_cycle = 0; /* 0 to 4095 - PWM duty cycle for the control signal*/
 
-//Old state of input signals for polling
+/*Old state of input signals for polling*/
 volatile uint8_t enable_state;
 volatile uint8_t start_state;
 volatile uint8_t preheat_state;
 volatile uint8_t sealing_state;
 volatile uint8_t reset_state;
 
-//Timers
-IntervalTimer MainTimer; // Interrupt timer
+/*Timers*/
+IntervalTimer MainTimer; /* Interrupt timer*/
 volatile uint32_t timer_polling = 0;
 volatile uint32_t timer_sampling = 0;
 volatile uint32_t timer_zerocross = 0;
@@ -95,23 +95,23 @@ volatile uint32_t timer_print = 0;
 volatile uint32_t timer_control = 0;
 volatile uint32_t timer_execute_sm = 0;
 
-//Periods
-const uint32_t PERIOD_MAIN_TIMER = 1000; // Period of main timer isr in us
-const uint32_t PERIOD_POLLING = 1000000; //  period in us. 
-const uint32_t PERIOD_SAMPLING = 100; //  period in us.
-const uint32_t PERIOD_DEBOUNCE = 1000; // period in us. 
-const uint32_t PERIOD_PRINT = 100; // period in us.
-const uint32_t PERIOD_CONTROL = 1000000; // period in us.
-const uint32_t PERIOD_SM_EXECUTE = 1; // period in us.
+/*Periods*/
+const uint32_t PERIOD_MAIN_TIMER = 1000; /* Period of main timer isr in us*/
+const uint32_t PERIOD_POLLING = 1000000; /*  period in us. */
+const uint32_t PERIOD_SAMPLING = 100; /*  period in us.*/
+const uint32_t PERIOD_DEBOUNCE = 1000; /* period in us. */
+const uint32_t PERIOD_PRINT = 100; /* period in us.*/
+const uint32_t PERIOD_CONTROL = 1000000; /* period in us.*/
+const uint32_t PERIOD_SM_EXECUTE = 1; /* period in us.*/
 
-//flags
-volatile bool flag_control = false; // Flag to signal that the control routine can be called
-volatile bool flag_sampling = false; // Flag to signal that the sampling routine can be called
-volatile bool flag_pot_read = false; // Flag to signal that the potentiometre can be read
-volatile bool flag_period = false; // Flag used to measure period between every other zero crossing
+/*flags*/
+volatile bool flag_control = false; /* Flag to signal that the control routine can be called*/
+volatile bool flag_sampling = false; /* Flag to signal that the sampling routine can be called*/
+volatile bool flag_pot_read = false; /* Flag to signal that the potentiometre can be read*/
+volatile bool flag_period = false; /* Flag used to measure period between every other zero crossing*/
 
 
-//State machine
+/*State machine*/
 sm_t state_machine;
 
 void _timer_ISR() {
@@ -205,7 +205,7 @@ void sm_execute(sm_t *psm) {
   }
 }
 
-// External ISR to measure the 230Vac period
+/* External ISR to measure the 230Vac period*/
 void ZEROCROSS() {
 
   if (digitalRead(CTRLpin_zerocross) == HIGH && flag_period == false)
@@ -225,7 +225,7 @@ void ZEROCROSS() {
   }
 }
 
-// Control function
+/* Control function*/
 void setTemp(uint16_t setpoint) {
   uint16_t new_duty_cycle = duty_cycle;
   int16_t temp_error = temp_measured - setpoint;
@@ -233,10 +233,10 @@ void setTemp(uint16_t setpoint) {
   derivative=(temp_error-temp_error_old);
 
   integral += temp_error;
-  if (integral > INTEGRAL_CLAMP) integral = INTEGRAL_CLAMP; // Positive clamping to avoid wind-up
-  if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP; // Negative clamping to avoid wind-up
+  if (integral > INTEGRAL_CLAMP) integral = INTEGRAL_CLAMP; /* Positive clamping to avoid wind-up*/
+  if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP; /* Negative clamping to avoid wind-up*/
 
-  new_duty_cycle += (PID_KP * temp_error) + (PID_KI * integral) + (PID_KD * derivative); // Falta a componente derivativa
+  new_duty_cycle += (PID_KP * temp_error) + (PID_KI * integral) + (PID_KD * derivative); /* Falta a componente derivativa*/
 
   if (new_duty_cycle > MAX_DUTY_CYCLE) {
     new_duty_cycle = MAX_DUTY_CYCLE;
@@ -246,27 +246,27 @@ void setTemp(uint16_t setpoint) {
     new_duty_cycle = new_duty_cycle;
   }
   duty_cycle = new_duty_cycle;
-  analogWrite(CTRLpin_PWM, new_duty_cycle); // Sinal de controlo do controlador
+  analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
 }
 
-// Samples ADC value for current and processes the data
+/* Samples ADC value for current and processes the data*/
 float sampleCurrent() {
 
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_current);
-  sample = (sample * 33000000)>>ADC_RESOLUTION; // [0 , 33000000] V
-  sample = sample - 16500000; // [-16500000 , 16500000] V 
-  sample = sample / CURRENT_K1; // [-16500000 , 16500000] / 2946 = [-5600 , 5600] Amps*100
+  sample = (sample * 33000000)>>ADC_RESOLUTION; /* [0 , 33000000] V */
+  sample = sample - 16500000; /* [-16500000 , 16500000] V */
+  sample = sample / CURRENT_K1; /* [-16500000 , 16500000] / 2946 = [-5600 , 5600] Amps*100 */
   return sample;
 }
 
-// Samples ADC value for voltage and processes the data
+/* Samples ADC value for voltage and processes the data*/
 float sampleVoltage() {
   int32_t sample = 0;;
   sample = analogRead(ANALOGpin_voltage);
-  sample = (sample * 330000)>>ADC_RESOLUTION; // [0 , 330000] V
-  sample = sample - 165000; // [-165000 , 165000] V 
-  sample = sample * VOLTAGE_K1 / 100000; // [-165000 , 165000] V  * 4114 / 100000 = [-6788 , 6788] V*100
+  sample = (sample * 330000)>>ADC_RESOLUTION; /* [0 , 330000] V */
+  sample = sample - 165000; /* [-165000 , 165000] V */
+  sample = sample * VOLTAGE_K1 / 100000; /* [-165000 , 165000] V  * 4114 / 100000 = [-6788 , 6788] V*100*/
   return sample;
 }
 
@@ -317,7 +317,7 @@ void ErrorHandler(int8_t error_code){
 }
 
 void setup() {
-  //Uart settings
+  /*Uart settings
   /*
     Data bits - 8
     Parity    - None
@@ -325,50 +325,50 @@ void setup() {
   */
   Serial.begin(BAUD_RATE);
 
-  //Analog Pins
-  analogReadRes(ADC_RESOLUTION); //12 bit ADC
-  pinMode(ANALOGpin_pot, INPUT); // Pot
-  pinMode(ANALOGpin_current, INPUT); // Current sensor
-  pinMode(ANALOGpin_voltage, INPUT); // Voltage sensor
+  /*Analog Pins*/
+  analogReadRes(ADC_RESOLUTION); /*12 bit ADC*/
+  pinMode(ANALOGpin_pot, INPUT); /* Pot*/
+  pinMode(ANALOGpin_current, INPUT); /* Current sensor*/
+  pinMode(ANALOGpin_voltage, INPUT); /* Voltage sensor*/
 
-  //Interrupts
+  /*Interrupts*/
   attachInterrupt(digitalPinToInterrupt(CTRLpin_zerocross), ZEROCROSS, RISING);
 
-  //Digital Pins
-  pinMode(IOpin_enable, INPUT); // EnableIO
-  pinMode(IOpin_start, INPUT); // StartIO
-  pinMode(IOpin_preheat, INPUT); // Pre-heat
-  pinMode(IOpin_sealing, INPUT); // SealingIO
-  pinMode(IOpin_reset, INPUT); // ResetIO
-  pinMode(IOpin_alarm, OUTPUT); // Alarm
-  pinMode(CTRLpin_PWM, OUTPUT); // PWM output for controller
-  pinMode(CTRLpin_OnOff, OUTPUT); // Controller On/Off
-  pinMode(CTRLpin_zerocross, INPUT); // Passagem por zero
+  /*Digital Pins
+  pinMode(IOpin_enable, INPUT); /* EnableIO*/
+  pinMode(IOpin_start, INPUT); /* StartIO*/
+  pinMode(IOpin_preheat, INPUT); /* Pre-heat*/
+  pinMode(IOpin_sealing, INPUT); /* SealingIO*/
+  pinMode(IOpin_reset, INPUT); /* ResetIO*/
+  pinMode(IOpin_alarm, OUTPUT); /* Alarm*/
+  pinMode(CTRLpin_PWM, OUTPUT); /* PWM output for controller*/
+  pinMode(CTRLpin_OnOff, OUTPUT); /* Controller On/Off*/
+  pinMode(CTRLpin_zerocross, INPUT); /* Passagem por zero*/
 
-  //Initialize digital outputs
+  /*Initialize digital outputs*/
   digitalWrite(IOpin_alarm, LOW);
   digitalWrite(CTRLpin_PWM, LOW);
   digitalWrite(CTRLpin_OnOff, LOW);
 
-  //PWM initialization
-  analogWriteResolution(PWM_RESOLUTION); // With 12 bits, the frequency is 36621.09 Hz (teensy 4.1 doc)
-  analogWrite(CTRLpin_PWM, LOW); // Power controller control signal
+  /*PWM initialization*/
+  analogWriteResolution(PWM_RESOLUTION); /* With 12 bits, the frequency is 36621.09 Hz (teensy 4.1 doc)*/
+  analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
-  //Start Timer ISR
+  /*Start Timer ISR*/
   MainTimer.begin(_timer_ISR, PERIOD_MAIN_TIMER);
-  //MainTimer.priority(128); //0-255
+  /*MainTimer.priority(128); /*0-255*/
 
-  //Initialize state machine
+  /*Initialize state machine*/
   sm_init(&state_machine, st_OFF);
-  Serial.print("\x1b[2J"); //Clear screen
+  Serial.print("\x1b[2J"); /*Clear screen*/
 }
 
 void loop() {
 
-  // Polling
+  /* Polling*/
   if (timer_polling >= PERIOD_POLLING)
   {
-    // Reset pin
+    /* Reset pin*/
     if (digitalRead(IOpin_reset) == HIGH && reset_state == LOW)
     {
       reset_state = digitalRead(IOpin_reset);
@@ -377,7 +377,7 @@ void loop() {
         sm_send_event(&state_machine, ev_RESET);
       }
     }
-    // Enable pin
+    /* Enable pin*/
     if (digitalRead(IOpin_enable) != enable_state)
     {
       Debounce();
@@ -391,7 +391,7 @@ void loop() {
         sm_send_event(&state_machine, ev_ENABLE_HIGH);
       }
     }
-    // Start pin
+    /* Start pin*/
     if (digitalRead(IOpin_start) != start_state)
     {
       Debounce();
@@ -405,7 +405,7 @@ void loop() {
         sm_send_event(&state_machine, ev_START_HIGH);
       }
     }
-    // Preheat pin
+    /* Preheat pin*/
     if (digitalRead(IOpin_preheat) != preheat_state)
     {
       Debounce();
@@ -419,7 +419,7 @@ void loop() {
         sm_send_event(&state_machine, ev_PREHEAT_HIGH);
       }
     }
-    // Sealing pin
+    /* Sealing pin*/
     if (digitalRead(IOpin_sealing) != sealing_state)
     {
       Debounce();
@@ -436,21 +436,21 @@ void loop() {
     timer_polling = 0;
   }
 
-  //Execute state machine
+  /*Execute state machine*/
   if (timer_execute_sm >= PERIOD_SM_EXECUTE)
   {
     sm_next_event(&state_machine);
     sm_execute(&state_machine);
     timer_execute_sm=0;
-    //Serial.print("\rExecute\n");
+    /*Serial.print("\rExecute\n");*/
   }
   
-  //Sampling
+  /*Sampling*/
   if (timer_sampling >= PERIOD_SAMPLING && flag_sampling == true)
   {
     if(flag_pot_read == true)
     {
-      temp_user_setpoint=(analogRead(ANALOGpin_pot)*MAX_TEMP)>>ADC_RESOLUTION ; // Read pot value
+      temp_user_setpoint=(analogRead(ANALOGpin_pot)*MAX_TEMP)>>ADC_RESOLUTION ; /* Read pot value*/
     }
     /*Note: How to handle critial sections?*/
     Serial.println(temp_user_setpoint);
@@ -462,24 +462,24 @@ void loop() {
     sample_count++;
     timer_sampling = 0;
 
-    //Serial.print("\rSampling\n");
+    /*Serial.print("\rSampling\n");*/
   }
 
-  //Control
+  /*Control*/
   if (timer_control >= PERIOD_CONTROL && flag_control == true)
   {
     setTemp(temp_setpoint);
     timer_control = 0;
-    //Serial.print("\rControl\n");
+    /*Serial.print("\rControl\n");*/
   }
   else if (timer_control >= PERIOD_CONTROL && flag_control == false)
   {
-    analogWrite(CTRLpin_PWM, 0); //Might be MAX_DUTY_CYCLE if logic is inverted: Set controller to minimum power
+    analogWrite(CTRLpin_PWM, 0); /*Might be MAX_DUTY_CYCLE if logic is inverted: Set controller to minimum power*/
   }
 #if 0
-  //Priting
+  /*Priting*/
   if (timer_print >= PERIOD_PRINT) {
-    Serial.print("\r\x1b[2J"); //Clear screen
+    Serial.print("\r\x1b[2J"); /*Clear screen*/
     printState(&state_machine);
     Serial.print("Tensao RMS: ");
     Serial.println(voltage_rms);
@@ -490,11 +490,11 @@ void loop() {
     timer_print = 0;
   }
 #endif
-  // Keyboard Simulation to test state machine
+  /* Keyboard Simulation to test state machine*/
   uint8_t incomingByte = 0;
   if (Serial.available() > 0) {
-    incomingByte = Serial.read(); // Byte is received in DECIMAL format
-    //Serial.print(incomingByte);
+    incomingByte = Serial.read(); /* Byte is received in DECIMAL format*/
+    /*Serial.print(incomingByte);*/
     switch (incomingByte) {
       case 'q':
       sm_send_event(&state_machine, ev_ENABLE_HIGH);
