@@ -108,25 +108,6 @@ void sm_next_event(sm_t *psm) {
       psm->current_state = st_ON;
     }
     break;
-#if 0
-    /************ RAISETEMP ************/
-    case st_RAISETEMP:
-    if (sm_event == ev_TEMPSET)
-    {
-        /*Transition actions*/
-      psm->current_state = st_SEAL;
-    }
-    else if (sm_event == ev_ENABLE_LOW)
-    {
-        /*Transition actions*/
-      psm->current_state = st_OFF;
-    }
-    else if ( sm_event == ev_RESET)
-    {
-      psm->current_state = st_ON;
-    }
-    break;
-#endif
     /************* SEALING **************/
     case st_SEAL:
     if (sm_event == ev_SEALING_LOW)
