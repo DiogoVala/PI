@@ -18,9 +18,9 @@
 #include "utils.h"
 
 /**** Analog Pins ****/
-#define ANALOGpin_pot 14 /* Analog input 0 - Pot
-#define ANALOGpin_current 15 /* Analog input 1 - Current
-#define ANALOGpin_voltage 16 /* Analog input 2 - Voltage
+#define ANALOGpin_pot 14 /* Analog input 0 - Pot*/
+#define ANALOGpin_current 15 /* Analog input 1 - Current*/
+#define ANALOGpin_voltage 16 /* Analog input 2 - Voltage*/
 
 /**** Digital Pins ****/
 /*PLC Signals*/
@@ -46,7 +46,7 @@
 #define ADC_RESOLUTION 12 /* 12 bit resolution
 
 /*PWM*/
-const uint8_t PWM_RESOLUTION = 12; /* 12 bit resolution
+const uint8_t PWM_RESOLUTION = 12; /* 12 bit resolution*/
 const uint16_t MAX_DUTY_CYCLE = (1 << PWM_RESOLUTION) - 1;
 const uint16_t MIN_DUTY_CYCLE = 0;
 
@@ -334,7 +334,7 @@ void setup() {
   /*Interrupts*/
   attachInterrupt(digitalPinToInterrupt(CTRLpin_zerocross), ZEROCROSS, RISING);
 
-  /*Digital Pins
+  /*Digital Pins*/
   pinMode(IOpin_enable, INPUT); /* EnableIO*/
   pinMode(IOpin_start, INPUT); /* StartIO*/
   pinMode(IOpin_preheat, INPUT); /* Pre-heat*/
@@ -356,7 +356,6 @@ void setup() {
 
   /*Start Timer ISR*/
   MainTimer.begin(_timer_ISR, PERIOD_MAIN_TIMER);
-  /*MainTimer.priority(128); /*0-255*/
 
   /*Initialize state machine*/
   sm_init(&state_machine, st_OFF);
