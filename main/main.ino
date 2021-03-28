@@ -11,10 +11,11 @@
     -Debouncer está com busy waiting
     -Como fazer seleção entre potenciómetro, display e ethernet
     -Error handling
-    -Optimize variables (reduce number of floats)
+    -Optimize: Reduce division/floats
 */
 
 #include "statemachine.h"
+#include "error_codes.h"
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
@@ -46,17 +47,17 @@
 
 /*PWM*/
 #define PWM_RESOLUTION 12
-#define MAX_DUTY_CYCLE 4095
+#define MAX_DUTY_CYCLE 4095 // Change according to PWM_RESOLUTION
 #define MIN_DUTY_CYCLE 0
 
-/*Sensores*/
-#define CURRENT_K 29464 /* Constante de conversão de corrente em tensão do circuito de condicionamento ( 29.464*1000 )*/
-#define VOLTAGE_K 4114 /* Constante do divisor resistivo do circuito de condicionamento (41.14*100)*/
-#define TEMP_COEF 0.00393F /* Example of temperature coefficient*/
-#define R_ZERO 0.8F /*Resistance of heatband at reference temperature*/
-#define T_ZERO 20 /*Reference temperature*/
+/*Sensors*/
+#define CURRENT_K 29464 /* Conditioning circuit - Current to voltage conversion constant ( 29.464 * 1000 )*/
+#define VOLTAGE_K 4114 /* Conditioning circuit - resistor divider constant  ( 41.14 * 100 ) */
+#define TEMP_COEF 0.00393F /* Example of temperature coefficient */
+#define R_ZERO 0.8F /* Resistance of heatband at reference temperature */
+#define T_ZERO 20 /* Reference temperature */
 
-/*Controlo*/
+/*Control*/
 #define MAX_TEMP 300
 #define PID_KP 1
 #define PID_KI 1
@@ -64,46 +65,45 @@
 #define INTEGRAL_CLAMP 1000
 
 /*Periods ( in microseconds) */
-const uint32_t PERIOD_MAIN = 100;
-/* 2^n multiples of Main timer*/
-const uint32_t PERIOD_POLLING = (800 /PERIOD_MAIN)-1;
-const uint32_t PERIOD_SAMPLING = (100 /PERIOD_MAIN)-1;
-const uint32_t PERIOD_DEBOUNCE = (1600 /PERIOD_MAIN)-1;
-const uint32_t PERIOD_PRINT = (100 /PERIOD_MAIN)-1;
-const uint32_t PERIOD_CONTROL = (1600 /PERIOD_MAIN)-1;
-const uint32_t PERIOD_SM_EXECUTE = (3200 /PERIOD_MAIN)-1;
+#define PERIOD_MAIN 100
+/* !!!These must be 2^n multiple of PERIOD_MAIN!!!*/
+#define PERIOD_POLLING 800
+#define PERIOD_SAMPLING 100
+#define PERIOD_DEBOUNCE 1600
+#define PERIOD_PRINT 100
+#define PERIOD_CONTROL 1600
+#define PERIOD_SM_EXECUTE 3200
 
-/* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
-const uint16_t T_slope=1/(TEMP_COEF*R_ZERO);
-const uint16_t T_b=1/TEMP_COEF-T_ZERO;
+/* Constants used for counting in timer ISR*/
+/* Example (PERIOD_DEBOUNCE):
 
-volatile uint16_t sample_count = 0; /*Number of samples taken*/
+   if(!(timer_main&0x0F))
+    timer_debounce++
+
+  Example (PERIOD_POLLING):
+
+   if(!(timer_main&0x07))
+    timer_polling++         */
+static const uint32_t COUNT_POLLING = (PERIOD_POLLING /PERIOD_MAIN)-1;
+static const uint32_t COUNT_SAMPLING = (PERIOD_SAMPLING /PERIOD_MAIN)-1;
+static const uint32_t COUNT_DEBOUNCE = (PERIOD_DEBOUNCE /PERIOD_MAIN)-1;
+static const uint32_t COUNT_PRINT = (PERIOD_PRINT /PERIOD_MAIN)-1;
+static const uint32_t COUNT_CONTROL = (PERIOD_CONTROL /PERIOD_MAIN)-1;
+static const uint32_t COUNT_EXECUTE = (PERIOD_SM_EXECUTE /PERIOD_MAIN)-1;
+
+/* Sampling */
+volatile uint16_t sample_count = 0;
 volatile int32_t current = 0; /* Storage of current samples*/
 volatile int32_t voltage = 0; /* Storage of voltage samples*/
-volatile float current_rms = 0; /* True RMS current*/
-volatile float voltage_rms = 0; /* True RMS voltage*/
-volatile float resistance = 0; /* Vrms/Irms*/
 
 /*Controlo*/
-volatile uint16_t temp_setpoint = 0; /* 0 to ~400º - setpoint to be applied to control routine*/
+volatile uint16_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint to be applied to control routine*/
 volatile uint16_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
 volatile uint16_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
 volatile uint16_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
-volatile uint16_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
-volatile int64_t integral = 0; /* Integral component of PID*/
-volatile int32_t derivative = 0; /* Derivative component of PID*/
-volatile uint16_t duty_cycle = 0; /* 0 to 4095 - PWM duty cycle for the control signal*/
-
-/*Old state of input signals for polling*/
-volatile uint8_t enable_state;
-volatile uint8_t start_state;
-volatile uint8_t preheat_state;
-volatile uint8_t sealing_state;
-volatile uint8_t reset_state;
 
 /*Timers*/
 IntervalTimer MainTimer; /* Interrupt timer*/
-static uint32_t timer_main=0;
 volatile uint32_t timer_polling = 0;
 volatile uint32_t timer_sampling = 0;
 volatile uint32_t timer_zerocross = 0;
@@ -116,26 +116,31 @@ volatile uint32_t timer_execute_sm = 0;
 volatile bool flag_control = false; /* Flag to signal that the control routine can be called*/
 volatile bool flag_sampling = false; /* Flag to signal that the sampling routine can be called*/
 volatile bool flag_pot_read = false; /* Flag to signal that the potentiometre can be read*/
-volatile bool flag_period = false; /* Flag used to measure period between every other zero crossing*/
-
 
 /*State machine*/
 sm_t state_machine;
 
-void _timer_ISR() {
+static void _timer_ISR() {
+  static uint32_t timer_main=0;
   timer_main++;
+
   /*Increment timers at 1/(2^n) times the main frequency*/
-  if(!(timer_main&PERIOD_POLLING))
+  if(!(timer_main&COUNT_POLLING))
     timer_polling++;
-  if(!(timer_main&PERIOD_SAMPLING))
+
+  if(!(timer_main&COUNT_SAMPLING))
     timer_sampling++;
-  if(!(timer_main&PERIOD_DEBOUNCE))
+
+  if(!(timer_main&COUNT_DEBOUNCE))
     timer_debounce++;
-  if(!(timer_main&PERIOD_PRINT))
+
+  if(!(timer_main&COUNT_PRINT))
     timer_print++;
-  if(!(timer_main&PERIOD_CONTROL))
+
+  if(!(timer_main&COUNT_CONTROL))
     timer_control++;
-  if(!(timer_main&PERIOD_SM_EXECUTE))
+
+  if(!(timer_main&COUNT_EXECUTE))
     timer_execute_sm++;
 }
 
@@ -200,6 +205,7 @@ void sm_execute(sm_t *psm) {
     flag_sampling=false;
     flag_control=false;
     break;
+    /* Note: Maybe put ALARM inside default case */
     default:
       /* State Actions*/
     digitalWrite(IOpin_alarm, LOW);
@@ -211,15 +217,29 @@ void sm_execute(sm_t *psm) {
 }
 
 /* External ISR to measure the 230Vac period*/
-void ZEROCROSS() {
+static void ZEROCROSS() {
+
+  static float current_rms = 0;
+  static float voltage_rms = 0;
+  static float resistance_rms = 0;
+  static bool flag_period = false; /* Flag used to measure period between every other zero crossing*/
+
+  /* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
+  const uint16_t T_slope=1/(TEMP_COEF*R_ZERO);
+  const uint16_t T_b=1/TEMP_COEF-T_ZERO;
 
   if (digitalRead(CTRLpin_zerocross) == HIGH && flag_period == false)
   {
     voltage_rms = sqrt(voltage / sample_count);
     current_rms = sqrt(current / sample_count);
-    resistance = voltage_rms / current_rms;
+    resistance_rms = voltage_rms / current_rms;
     /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
-    temp_measured = resistance*T_slope-T_b;
+    temp_measured = resistance_rms*T_slope-T_b;
+    if(temp_measured>MAX_TEMP)
+    {
+      ErrorHandler(MAX_TEMP_EXCEEDED);
+    }
+
     sample_count = 0;
     voltage = 0;
     current = 0;
@@ -232,9 +252,17 @@ void ZEROCROSS() {
 }
 
 /* Control function*/
-void setTemp(uint16_t setpoint) {
+static void control_temp(uint16_t setpoint) {
+
+  static uint16_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
+  static int32_t integral = 0; /* Integral component of PID*/
+  static int32_t derivative = 0; /* Derivative component of PID*/
+  static uint16_t duty_cycle = 0; /* 0 to 4095 - PWM duty cycle for the control signal*/
+
   uint16_t new_duty_cycle = duty_cycle;
   int16_t temp_error = temp_measured - setpoint;
+
+  /*Controlo*/
 
   derivative=(temp_error-temp_error_old);
 
@@ -246,17 +274,17 @@ void setTemp(uint16_t setpoint) {
 
   if (new_duty_cycle > MAX_DUTY_CYCLE) {
     new_duty_cycle = MAX_DUTY_CYCLE;
-  } else if (new_duty_cycle < MIN_DUTY_CYCLE) {
+  } 
+  else if (new_duty_cycle < MIN_DUTY_CYCLE) {
     new_duty_cycle = MIN_DUTY_CYCLE;
-  } else {
-    new_duty_cycle = new_duty_cycle;
   }
+
   duty_cycle = new_duty_cycle;
   analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
 }
 
 /* Samples ADC value for current and processes the data*/
-float sampleCurrent() {
+static float sampleCurrent() {
 
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_current);
@@ -267,7 +295,7 @@ float sampleCurrent() {
 }
 
 /* Samples ADC value for voltage and processes the data*/
-float sampleVoltage() {
+static float sampleVoltage() {
   int32_t sample = 0;;
   sample = analogRead(ANALOGpin_voltage);
   sample = (sample * 330000)>>ADC_RESOLUTION; /* [0 , 330000] V */
@@ -307,12 +335,6 @@ void printState(sm_t *psm) {
     Serial.println("ALARM");
     break;
   }
-}
-
-bool GetPinVal(int pin) {
-  if (digitalRead(pin) == HIGH)
-    return true;
-  return false;
 }
 
 void ErrorHandler(int8_t error_code){
@@ -369,6 +391,13 @@ void setup() {
 }
 
 void loop() {
+
+  /*Old state of input signals for polling*/
+  static uint8_t enable_state;
+  static uint8_t start_state;
+  static uint8_t preheat_state;
+  static uint8_t sealing_state;
+  static uint8_t reset_state;
 
   /* Polling*/
   if (timer_polling >= PERIOD_MAIN)
@@ -462,8 +491,10 @@ void loop() {
     uint32_t temp;
     temp=sampleCurrent();
     current += temp*temp;
+
     temp=sampleVoltage();
     voltage += temp*temp;
+
     sample_count++;
     timer_sampling = 0;
 
@@ -473,13 +504,13 @@ void loop() {
   /*Control*/
   if (timer_control >= PERIOD_MAIN && flag_control == true)
   {
-    setTemp(temp_setpoint);
+    control_temp(temp_setpoint);
     timer_control = 0;
     Serial.print("\rControl\n");
   }
   else if (timer_control >= PERIOD_MAIN && flag_control == false)
   {
-    analogWrite(CTRLpin_PWM, 0); /*Might be MAX_DUTY_CYCLE if logic is inverted: Set controller to minimum power*/
+    analogWrite(CTRLpin_PWM, 0); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
   }
 #if 0
   /*Priting*/
