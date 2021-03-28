@@ -92,30 +92,30 @@ static const uint32_t COUNT_CONTROL = (PERIOD_CONTROL /PERIOD_MAIN)-1;
 static const uint32_t COUNT_EXECUTE = (PERIOD_SM_EXECUTE /PERIOD_MAIN)-1;
 
 /* Sampling */
-volatile uint16_t sample_count = 0;
-volatile int32_t current = 0; /* Storage of current samples*/
-volatile int32_t voltage = 0; /* Storage of voltage samples*/
+static volatile uint8_t sample_count = 0;
+static volatile int32_t sum_current = 0; /* Storage of current samples*/
+static volatile int32_t sum_voltage = 0; /* Storage of voltage samples*/
 
 /*Controlo*/
-volatile uint16_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint to be applied to control routine*/
-volatile uint16_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
-volatile uint16_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
-volatile uint16_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
+static volatile uint16_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint to be applied to control routine*/
+static volatile uint16_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
+static volatile uint16_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
+static volatile uint16_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
 
 /*Timers*/
 IntervalTimer MainTimer; /* Interrupt timer*/
-volatile uint32_t timer_polling = 0;
-volatile uint32_t timer_sampling = 0;
-volatile uint32_t timer_zerocross = 0;
-volatile uint32_t timer_debounce = 0;
-volatile uint32_t timer_print = 0;
-volatile uint32_t timer_control = 0;
-volatile uint32_t timer_execute_sm = 0;
+static volatile uint32_t timer_polling = 0;
+static volatile uint32_t timer_sampling = 0;
+static volatile uint32_t timer_zerocross = 0;
+static volatile uint32_t timer_debounce = 0;
+static volatile uint32_t timer_print = 0;
+static volatile uint32_t timer_control = 0;
+static volatile uint32_t timer_execute_sm = 0;
 
 /*flags*/
-volatile bool flag_control = false; /* Flag to signal that the control routine can be called*/
-volatile bool flag_sampling = false; /* Flag to signal that the sampling routine can be called*/
-volatile bool flag_pot_read = false; /* Flag to signal that the potentiometre can be read*/
+static volatile bool flag_control = false; /* Flag to signal that the control routine can be called*/
+static volatile bool flag_sampling = false; /* Flag to signal that the sampling routine can be called*/
+static volatile bool flag_pot_read = false; /* Flag to signal that the potentiometre can be read*/
 
 /*State machine*/
 sm_t state_machine;
@@ -216,7 +216,7 @@ void sm_execute(sm_t *psm) {
   }
 }
 
-/* External ISR to measure the 230Vac period*/
+/* External input ISR to calculate RMS and temperature */
 static void ZEROCROSS() {
 
   static float current_rms = 0;
@@ -225,24 +225,24 @@ static void ZEROCROSS() {
   static bool flag_period = false; /* Flag used to measure period between every other zero crossing*/
 
   /* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
-  const uint16_t T_slope=1/(TEMP_COEF*R_ZERO);
-  const uint16_t T_b=1/TEMP_COEF-T_ZERO;
+  static const uint16_t T_slope=1/(TEMP_COEF*R_ZERO);
+  static const uint16_t T_b=1/TEMP_COEF-T_ZERO;
 
   if (digitalRead(CTRLpin_zerocross) == HIGH && flag_period == false)
   {
-    voltage_rms = sqrt(voltage / sample_count);
-    current_rms = sqrt(current / sample_count);
+    voltage_rms = sqrt(sum_voltage / sample_count);
+    current_rms = sqrt(sum_current / sample_count);
     resistance_rms = voltage_rms / current_rms;
     /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
     temp_measured = resistance_rms*T_slope-T_b;
     if(temp_measured>MAX_TEMP)
     {
-      ErrorHandler(MAX_TEMP_EXCEEDED);
+      errorHandler(MAX_TEMP_EXCEEDED);
     }
 
     sample_count = 0;
-    voltage = 0;
-    current = 0;
+    sum_voltage = 0;
+    sum_current = 0;
     flag_period = true;
   }
   else if ( digitalRead(CTRLpin_zerocross) == HIGH && flag_period == true)
@@ -251,8 +251,7 @@ static void ZEROCROSS() {
   }
 }
 
-/* Control function*/
-static void control_temp(uint16_t setpoint) {
+static void controlTemp(uint16_t setpoint) {
 
   static uint16_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
   static int32_t integral = 0; /* Integral component of PID*/
@@ -283,7 +282,6 @@ static void control_temp(uint16_t setpoint) {
   analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
 }
 
-/* Samples ADC value for current and processes the data*/
 static float sampleCurrent() {
 
   int32_t sample = 0;
@@ -294,7 +292,6 @@ static float sampleCurrent() {
   return sample;
 }
 
-/* Samples ADC value for voltage and processes the data*/
 static float sampleVoltage() {
   int32_t sample = 0;;
   sample = analogRead(ANALOGpin_voltage);
@@ -304,13 +301,13 @@ static float sampleVoltage() {
   return sample;
 }
 
-void Debounce() {
+static void debounce() {
   timer_debounce = 0;
   while (timer_debounce < PERIOD_DEBOUNCE);
 }
 
 /*Function not needed in final product*/
-void printState(sm_t *psm) {
+static void printState(sm_t *psm) {
   Serial.print("\n\rState: ");
   switch (sm_get_current_state(psm)) {
     case st_OFF:
@@ -337,7 +334,7 @@ void printState(sm_t *psm) {
   }
 }
 
-void ErrorHandler(int8_t error_code){
+static void errorHandler(int8_t error_code){
   switch(error_code){
     default:
     Serial.print("Error");
@@ -387,6 +384,7 @@ void setup() {
 
   /*Initialize state machine*/
   sm_init(&state_machine, st_OFF);
+
   Serial.print("\x1b[2J"); /*Clear screen*/
 }
 
@@ -414,7 +412,7 @@ void loop() {
     /* Enable pin*/
     if (digitalRead(IOpin_enable) != enable_state)
     {
-      Debounce();
+      debounce();
       enable_state = digitalRead(IOpin_enable);
       if (enable_state == LOW)
       {
@@ -428,7 +426,7 @@ void loop() {
     /* Start pin*/
     if (digitalRead(IOpin_start) != start_state)
     {
-      Debounce();
+      debounce();
       start_state = digitalRead(IOpin_start);
       if (start_state == LOW)
       {
@@ -442,7 +440,7 @@ void loop() {
     /* Preheat pin*/
     if (digitalRead(IOpin_preheat) != preheat_state)
     {
-      Debounce();
+      debounce();
       preheat_state = digitalRead(IOpin_preheat);
       if (preheat_state == LOW)
       {
@@ -456,7 +454,7 @@ void loop() {
     /* Sealing pin*/
     if (digitalRead(IOpin_sealing) != sealing_state)
     {
-      Debounce();
+      debounce();
       sealing_state = digitalRead(IOpin_sealing);
       if (sealing_state == LOW)
       {
@@ -490,10 +488,10 @@ void loop() {
     /*Serial.println(temp_user_setpoint);*/
     uint32_t temp;
     temp=sampleCurrent();
-    current += temp*temp;
+    sum_current += temp*temp;
 
     temp=sampleVoltage();
-    voltage += temp*temp;
+    sum_voltage += temp*temp;
 
     sample_count++;
     timer_sampling = 0;
@@ -504,7 +502,7 @@ void loop() {
   /*Control*/
   if (timer_control >= PERIOD_MAIN && flag_control == true)
   {
-    control_temp(temp_setpoint);
+    controlTemp(temp_setpoint);
     timer_control = 0;
     Serial.print("\rControl\n");
   }
