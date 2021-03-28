@@ -45,16 +45,16 @@
 #define ADC_RESOLUTION 12
 
 /*PWM*/
-#define PWM_RESOLUTION = 12
-#define MAX_DUTY_CYCLE = 4095
-#define MIN_DUTY_CYCLE = 0
+#define PWM_RESOLUTION 12
+#define MAX_DUTY_CYCLE 4095
+#define MIN_DUTY_CYCLE 0
 
 /*Sensores*/
 #define CURRENT_K 29464 /* Constante de conversão de corrente em tensão do circuito de condicionamento ( 29.464*1000 )*/
 #define VOLTAGE_K 4114 /* Constante do divisor resistivo do circuito de condicionamento (41.14*100)*/
 #define TEMP_COEF 0.00393F /* Example of temperature coefficient*/
 #define R_ZERO 0.8F /*Resistance of heatband at reference temperature*/
-#define T_ZERO 1 /*Reference temperature*/
+#define T_ZERO 20 /*Reference temperature*/
 
 /*Controlo*/
 #define MAX_TEMP 300
@@ -64,13 +64,18 @@
 #define INTEGRAL_CLAMP 1000
 
 /*Periods ( in microseconds) */
-#define PERIOD_MAIN_TIMER 1000
-#define PERIOD_POLLING 1000000
-#define PERIOD_SAMPLING 100
-#define PERIOD_DEBOUNCE 1000
-#define PERIOD_PRINT 100
-#define PERIOD_CONTROL 1000000
-#define PERIOD_SM_EXECUTE 1
+const uint32_t PERIOD_MAIN = 100;
+/* 2^n multiples of Main timer*/
+const uint32_t PERIOD_POLLING = (800 /PERIOD_MAIN)-1;
+const uint32_t PERIOD_SAMPLING = (100 /PERIOD_MAIN)-1;
+const uint32_t PERIOD_DEBOUNCE = (1600 /PERIOD_MAIN)-1;
+const uint32_t PERIOD_PRINT = (100 /PERIOD_MAIN)-1;
+const uint32_t PERIOD_CONTROL = (1600 /PERIOD_MAIN)-1;
+const uint32_t PERIOD_SM_EXECUTE = (3200 /PERIOD_MAIN)-1;
+
+/* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
+const uint16_t T_slope=1/(TEMP_COEF*R_ZERO);
+const uint16_t T_b=1/TEMP_COEF-T_ZERO;
 
 volatile uint16_t sample_count = 0; /*Number of samples taken*/
 volatile int32_t current = 0; /* Storage of current samples*/
@@ -98,6 +103,7 @@ volatile uint8_t reset_state;
 
 /*Timers*/
 IntervalTimer MainTimer; /* Interrupt timer*/
+static uint32_t timer_main=0;
 volatile uint32_t timer_polling = 0;
 volatile uint32_t timer_sampling = 0;
 volatile uint32_t timer_zerocross = 0;
@@ -117,13 +123,20 @@ volatile bool flag_period = false; /* Flag used to measure period between every 
 sm_t state_machine;
 
 void _timer_ISR() {
-  timer_execute_sm++;
-  timer_polling++;
-  timer_sampling++;
-  timer_zerocross++;
-  timer_debounce++;
-  timer_print++;
-  timer_control++;
+  timer_main++;
+  /*Increment timers at 1/(2^n) times the main frequency*/
+  if(!(timer_main&PERIOD_POLLING))
+    timer_polling++;
+  if(!(timer_main&PERIOD_SAMPLING))
+    timer_sampling++;
+  if(!(timer_main&PERIOD_DEBOUNCE))
+    timer_debounce++;
+  if(!(timer_main&PERIOD_PRINT))
+    timer_print++;
+  if(!(timer_main&PERIOD_CONTROL))
+    timer_control++;
+  if(!(timer_main&PERIOD_SM_EXECUTE))
+    timer_execute_sm++;
 }
 
 void sm_execute(sm_t *psm) {
@@ -205,7 +218,8 @@ void ZEROCROSS() {
     voltage_rms = sqrt(voltage / sample_count);
     current_rms = sqrt(current / sample_count);
     resistance = voltage_rms / current_rms;
-    temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);
+    /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
+    temp_measured = resistance*T_slope-T_b;
     sample_count = 0;
     voltage = 0;
     current = 0;
@@ -228,7 +242,7 @@ void setTemp(uint16_t setpoint) {
   if (integral > INTEGRAL_CLAMP) integral = INTEGRAL_CLAMP;
   if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP;
 
-  new_duty_cycle += (PID_KP * temp_error) + (PID_KI * integral) + (PID_KD * derivative);
+  new_duty_cycle += ((PID_KP * temp_error) + (PID_KI * integral) + (PID_KD * derivative));
 
   if (new_duty_cycle > MAX_DUTY_CYCLE) {
     new_duty_cycle = MAX_DUTY_CYCLE;
@@ -248,7 +262,7 @@ float sampleCurrent() {
   sample = analogRead(ANALOGpin_current);
   sample = (sample * 33000000)>>ADC_RESOLUTION; /* [0 , 33000000] V */
   sample = sample - 16500000; /* [-16500000 , 16500000] V */
-  sample = sample / CURRENT_K1; /* [-16500000 , 16500000] / 2946 = [-5600 , 5600] Amps*100 */
+  sample = sample / CURRENT_K; /* [-16500000 , 16500000] / 2946 = [-5600 , 5600] Amps*100 */
   return sample;
 }
 
@@ -258,7 +272,7 @@ float sampleVoltage() {
   sample = analogRead(ANALOGpin_voltage);
   sample = (sample * 330000)>>ADC_RESOLUTION; /* [0 , 330000] V */
   sample = sample - 165000; /* [-165000 , 165000] V */
-  sample = sample * VOLTAGE_K1 / 100000; /* [-165000 , 165000] V  * 4114 / 100000 = [-6788 , 6788] V*100*/
+  sample = sample * VOLTAGE_K / 100000; /* [-165000 , 165000] V  * 4114 / 100000 = [-6788 , 6788] V*100*/
   return sample;
 }
 
@@ -311,7 +325,6 @@ void ErrorHandler(int8_t error_code){
 
 void setup() {
   /*Uart settings
-  /*
     Data bits - 8
     Parity    - None
     Stop bits - 1
@@ -348,7 +361,7 @@ void setup() {
   analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
   /*Start Timer ISR*/
-  MainTimer.begin(_timer_ISR, PERIOD_MAIN_TIMER);
+  MainTimer.begin(_timer_ISR, PERIOD_MAIN);
 
   /*Initialize state machine*/
   sm_init(&state_machine, st_OFF);
@@ -358,7 +371,7 @@ void setup() {
 void loop() {
 
   /* Polling*/
-  if (timer_polling >= PERIOD_POLLING)
+  if (timer_polling >= PERIOD_MAIN)
   {
     /* Reset pin*/
     if (digitalRead(IOpin_reset) == HIGH && reset_state == LOW)
@@ -429,23 +442,23 @@ void loop() {
   }
 
   /*Execute state machine*/
-  if (timer_execute_sm >= PERIOD_SM_EXECUTE)
+  if (timer_execute_sm >= PERIOD_MAIN)
   {
     sm_next_event(&state_machine);
     sm_execute(&state_machine);
     timer_execute_sm=0;
     /*Serial.print("\rExecute\n");*/
   }
-  
+
   /*Sampling*/
-  if (timer_sampling >= PERIOD_SAMPLING && flag_sampling == true)
+  if (timer_sampling >= PERIOD_MAIN && flag_sampling == true)
   {
     if(flag_pot_read == true)
     {
       temp_user_setpoint=(analogRead(ANALOGpin_pot)*MAX_TEMP)>>ADC_RESOLUTION ; /* Read pot value*/
     }
     /*Note: How to handle critial sections?*/
-    Serial.println(temp_user_setpoint);
+    /*Serial.println(temp_user_setpoint);*/
     uint32_t temp;
     temp=sampleCurrent();
     current += temp*temp;
@@ -454,17 +467,17 @@ void loop() {
     sample_count++;
     timer_sampling = 0;
 
-    /*Serial.print("\rSampling\n");*/
+    Serial.print("\rSampling\n");
   }
 
   /*Control*/
-  if (timer_control >= PERIOD_CONTROL && flag_control == true)
+  if (timer_control >= PERIOD_MAIN && flag_control == true)
   {
     setTemp(temp_setpoint);
     timer_control = 0;
-    /*Serial.print("\rControl\n");*/
+    Serial.print("\rControl\n");
   }
-  else if (timer_control >= PERIOD_CONTROL && flag_control == false)
+  else if (timer_control >= PERIOD_MAIN && flag_control == false)
   {
     analogWrite(CTRLpin_PWM, 0); /*Might be MAX_DUTY_CYCLE if logic is inverted: Set controller to minimum power*/
   }
@@ -490,45 +503,37 @@ void loop() {
     switch (incomingByte) {
       case 'q':
       sm_send_event(&state_machine, ev_ENABLE_HIGH);
-      sm_execute(&state_machine);
       break;
       case 'a':
       sm_send_event(&state_machine, ev_ENABLE_LOW);
-      sm_execute(&state_machine);
       break;
       case 'w':
       sm_send_event(&state_machine, ev_START_HIGH);
-      sm_execute(&state_machine);
       break;
       case 's':
       sm_send_event(&state_machine, ev_START_LOW);
-      sm_execute(&state_machine);
       break;
       case 'e':
       sm_send_event(&state_machine, ev_PREHEAT_HIGH);
-      sm_execute(&state_machine);
       break;
       case 'd':
       sm_send_event(&state_machine, ev_PREHEAT_LOW);
-      sm_execute(&state_machine);
       break;
       case 'r':
       sm_send_event(&state_machine, ev_SEALING_HIGH);
-      sm_execute(&state_machine);
       break;
       case 'f':
       sm_send_event(&state_machine, ev_SEALING_LOW);
-      sm_execute(&state_machine);
       break;
       case 't':
       sm_send_event(&state_machine, ev_TEMPSET);
-      sm_execute(&state_machine);
       break;
       default:
       sm_send_event(&state_machine, ev_RESET);
-      sm_execute(&state_machine);
       break;
     }
+    sm_next_event(&state_machine);
+    sm_execute(&state_machine);
     printState(&state_machine);
   }
 }
