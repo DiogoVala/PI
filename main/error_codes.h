@@ -2,7 +2,7 @@
    File:   statemachine.h
    Author: Diogo Vala & Diogo Fernandes
 
-   Overview: Define state machine
+   Overview: Error codes
 */
 
 #ifndef ERROR_CODES_H

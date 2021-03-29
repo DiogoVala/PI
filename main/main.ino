@@ -148,6 +148,8 @@ void sm_execute(sm_t *psm) {
   /* To do:
     -ações de cada estado
   */
+  Serial.print("\r\x1b[2J");
+  printState(psm);
   switch (sm_get_current_state(psm))
   {
     /*************** OFF ***************/
@@ -157,6 +159,9 @@ void sm_execute(sm_t *psm) {
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=false;
     flag_control=false;
+
+    Serial.print("\rSampling: OFF\n");
+    Serial.print("\rTemp. Control: OFF\n");
     break;
 
     /*************** ON ***************/
@@ -166,6 +171,9 @@ void sm_execute(sm_t *psm) {
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=true;
     flag_control=false;
+
+    Serial.print("\rSampling: ON\n");
+    Serial.print("\rTemp. Control: OFF\n");
     break;
 
     /************ CYCLESTART ************/
@@ -175,6 +183,9 @@ void sm_execute(sm_t *psm) {
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=true;
     flag_control=false;
+
+    Serial.print("\rSampling: ON\n");
+    Serial.print("\rTemp. Control: OFF\n");
     break;
 
     /************ PREHEATING ************/
@@ -185,6 +196,9 @@ void sm_execute(sm_t *psm) {
     flag_sampling=true;
     flag_control=true;
     temp_setpoint=temp_preheat;
+
+    Serial.print("\rSampling: ON\n");
+    Serial.print("\rTemp. Control: ON\n");
     break;
 
     /************* SEALING **************/
@@ -195,6 +209,9 @@ void sm_execute(sm_t *psm) {
     flag_sampling=true;
     flag_control=true;
     temp_setpoint=temp_user_setpoint;
+
+    Serial.print("\rSampling: ON\n");
+    Serial.print("\rTemp. Control: ON\n");
     break;
 
     /************* ALARM **************/
@@ -204,6 +221,8 @@ void sm_execute(sm_t *psm) {
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=false;
     flag_control=false;
+    Serial.print("\rSampling: OFF\n");
+    Serial.print("\rTemp. Control: OFF\n");
     break;
     /* Note: Maybe put ALARM inside default case */
     default:
@@ -468,6 +487,21 @@ void loop() {
     timer_polling = 0;
   }
 
+#if 0
+  /*Priting*/
+  if (timer_print >= PERIOD_PRINT) {
+    Serial.print("\r\x1b[2J"); /*Clear screen*/
+    printState(&state_machine);
+    Serial.print("Tensao RMS: ");
+    Serial.println(voltage_rms);
+    Serial.print("CorrenteRMS : ");
+    Serial.println(current_rms);
+    Serial.print("Temperatura: ");
+    Serial.println(temp_measured);
+    timer_print = 0;
+  }
+#endif
+
   /*Execute state machine*/
   if (timer_execute_sm >= PERIOD_MAIN)
   {
@@ -496,7 +530,7 @@ void loop() {
     sample_count++;
     timer_sampling = 0;
 
-    Serial.print("\rSampling\n");
+    //Serial.print("\rSampling\n");
   }
 
   /*Control*/
@@ -504,26 +538,13 @@ void loop() {
   {
     controlTemp(temp_setpoint);
     timer_control = 0;
-    Serial.print("\rControl\n");
+    //Serial.print("\rControl\n");
   }
   else if (timer_control >= PERIOD_MAIN && flag_control == false)
   {
     analogWrite(CTRLpin_PWM, 0); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
   }
-#if 0
-  /*Priting*/
-  if (timer_print >= PERIOD_PRINT) {
-    Serial.print("\r\x1b[2J"); /*Clear screen*/
-    printState(&state_machine);
-    Serial.print("Tensao RMS: ");
-    Serial.println(voltage_rms);
-    Serial.print("CorrenteRMS : ");
-    Serial.println(current_rms);
-    Serial.print("Temperatura: ");
-    Serial.println(temp_measured);
-    timer_print = 0;
-  }
-#endif
+
   /* Keyboard Simulation to test state machine*/
   uint8_t incomingByte = 0;
   if (Serial.available() > 0) {
@@ -563,6 +584,6 @@ void loop() {
     }
     sm_next_event(&state_machine);
     sm_execute(&state_machine);
-    printState(&state_machine);
+    //printState(&state_machine);
   }
 }
