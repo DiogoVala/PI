@@ -12,6 +12,7 @@
 typedef enum {
   st_OFF,
   st_ON,
+  st_IDLE,
   st_CYCLESTART,
   st_PREHEATING,
   st_RAISETEMP,
@@ -34,7 +35,7 @@ typedef enum {
   ev_SEALING_LOW,
   ev_TEMPSET,
   ev_RESET,
-  ev_ALARM
+  ev_OK_LOW,
 } sm_event_t;
 
 //State machine definition

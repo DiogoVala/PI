@@ -31,7 +31,6 @@ sm_state_t sm_get_current_state(sm_t *psm)
 void sm_next_event(sm_t *psm) {
 
   sm_event_t sm_event = psm->last_event;
-
   switch (sm_get_current_state(psm))
   {
     /*************** OFF ***************/
@@ -39,7 +38,7 @@ void sm_next_event(sm_t *psm) {
     if (sm_event == ev_ENABLE_HIGH)
     {
         /*Transition actions*/
-      psm->current_state = st_ON;
+      psm->current_state = st_IDLE;
     }
     break;
 
@@ -50,10 +49,18 @@ void sm_next_event(sm_t *psm) {
         /*Transition actions*/
       psm->current_state = st_OFF;
     }
-    else if (sm_event == ev_START_HIGH)
+    break;
+
+    case st_IDLE:
+    if (sm_event == ev_START_HIGH)
     {
         /*Transition actions*/
       psm->current_state = st_CYCLESTART;
+    }
+    else if (sm_event == ev_ENABLE_LOW)
+    {
+        /*Transition actions*/
+      psm->current_state = st_OFF;
     }
     break;
 
@@ -62,7 +69,7 @@ void sm_next_event(sm_t *psm) {
     if (sm_event == ev_START_LOW)
     {
         /*Transition actions*/
-      psm->current_state = st_ON;
+      psm->current_state = st_IDLE;
     }
     else if (sm_event == ev_PREHEAT_HIGH)
     {
@@ -134,12 +141,14 @@ void sm_next_event(sm_t *psm) {
     }
     else if ( sm_event == ev_RESET)
     {
-      psm->current_state = st_ON;
+      psm->current_state = st_IDLE;
     }
     break;
     default:
       psm->current_state = st_ALARM;
     break;
   }
+  if(sm_event == ev_OK_LOW)
+    psm->current_state = st_ALARM;
 }
  
