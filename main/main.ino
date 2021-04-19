@@ -276,8 +276,8 @@ static void _calcTemp_ISR() {
   static float resistance_rms = 0;
 
   /* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
-  static const uint16_t T_slope=1/(TEMP_COEF*R_ZERO);
-  static const uint16_t T_b=1/TEMP_COEF-T_ZERO;
+  static const float T_slope=1/(TEMP_COEF*R_ZERO);
+  static const float T_b=1/TEMP_COEF-T_ZERO;
 
   voltage_rms = sqrt(sum_voltage / sample_count);
   current_rms = sqrt(sum_current / sample_count);
