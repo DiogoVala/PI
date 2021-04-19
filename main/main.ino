@@ -17,6 +17,7 @@
  * Tested and working:
  *  - PWM working at 32226. Controller saturates because there's no feedback.
  *  - Polling working and states change accordingly.
+ *  - Temperature calculation working
  */
 
 
@@ -53,7 +54,7 @@
 
 /*PWM*/
 #define PWM_FREQUENCY 32226
-#define PWM_RESOLUTION 12
+#define PWM_RESOLUTION 12 
 #define MAX_DUTY_CYCLE 4095 // Change according to PWM_RESOLUTION
 #define MIN_DUTY_CYCLE 0
 
@@ -80,7 +81,7 @@
 #define PERIOD_DEBOUNCE 1600
 #define PERIOD_PRINT 100
 #define PERIOD_CONTROL 1600
-#define PERIOD_SM_EXECUTE 25600
+#define PERIOD_SM_EXECUTE 200
 
 /* Constants used for counting in timer ISR*/
 /* Example (PERIOD_DEBOUNCE):
@@ -116,7 +117,7 @@ IntervalTimer Timer_230V;
 static volatile uint32_t count_polling = 0;
 static volatile uint32_t count_sampling = 0;
 static volatile uint32_t count_zerocross = 0;
-static volatile uint32_t count_debounce = 0;
+static volatile uint32_t count_debounce = 0; /*Note: Not used*/
 static volatile uint32_t count_print = 0;
 static volatile uint32_t count_control = 0;
 static volatile uint32_t count_execute_sm = 0;
@@ -125,10 +126,10 @@ static volatile uint32_t count_execute_sm = 0;
 static volatile bool flag_control = false; /* Flag to signal that the control routine can be called*/
 static volatile bool flag_sampling = false; /* Flag to signal that the sampling routine can be called*/
 static volatile bool flag_pot_read = false; /* Flag to signal that the potentiometre can be read*/
-static volatile bool flag_print = false;
 
-/*State machine*/
-sm_t state_machine;
+/*State machines*/
+static sm_t main_machine;
+static sm_t sub_machine;
 
 static void _timer_ISR() {
   static uint32_t count_main=0;
@@ -154,57 +155,105 @@ static void _timer_ISR() {
     count_execute_sm++;
 }
 
-void sm_execute(sm_t *psm) {
-  /* To do:
-    -ações de cada estado
-  */
-  //Serial.print("\r\x1b[2J");
-  //Serial.print("\rTermorregulador Digital\n");
+static void sm_execute_main(sm_t *psm) {
+
+  Serial.print("\r\x1b[2J"); /*Clear screen*/
+  Serial.print("\rTermorregulador Digital\n");
   printState(psm);
+
   switch (sm_get_current_state(psm))
   {
     /*************** OFF ***************/
     case st_OFF:
-      /* State Actions*/
+    /*State Actions*/
     digitalWrite(IOpin_alarm, LOW);
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=false;
     flag_control=false;
 
-    //Serial.print("\rSampling: OFF\n");
-    //Serial.print("\rTemp. Control: OFF\n");
-    //Serial.print("\n\n\n");
+    /*Transitions*/
+    if (psm->last_event == ev_ENABLE_HIGH)
+    {
+      psm->current_state = st_ON;
+    }
     break;
 
     /*************** ON ***************/
     case st_ON:
-        /* State Actions*/
-    digitalWrite(IOpin_alarm, HIGH);
-    digitalWrite(CTRLpin_OnOff, LOW);
-    flag_sampling=false;
-    flag_control=false;
+    /*State Actions*/
 
-    //Serial.print("\rSampling: OFF\n");
-    //Serial.print("\rTemp. Control: OFF\n");
-    //Serial.print("\n\n\n");
+    /*Transitions*/
+    if (psm->last_event == ev_ENABLE_LOW)
+    {
+      psm->current_state = st_OFF;
+    }
+    if (psm->last_event == ev_RESET)
+    {
+      sm_init(&sub_machine, st_IDLE);
+    }
+
+    sm_execute_sub(&sub_machine);
     break;
 
-    /*************** IDLE ***************/
+    /************* ALARM **************/
+    case st_ALARM:
+    /*State Actions*/
+    digitalWrite(IOpin_alarm, LOW);
+    digitalWrite(CTRLpin_OnOff, LOW);
+    flag_sampling=false;
+    flag_control=false;
+
+    Serial.print("\rError Code: 123\n");
+    Serial.print("\n\n");
+
+    /*Transitions*/
+    if (psm->last_event == ev_ENABLE_LOW)
+    {
+      psm->current_state = st_OFF;
+    }
+    if (psm->last_event == ev_RESET)
+    {
+      sm_init(&sub_machine, st_IDLE);
+    }
+    break;
+
+    /* Note: Maybe put ALARM inside default case */
+
+  }
+  /*Force Alarm state */
+  if(psm->last_event == ev_OK_LOW)
+  {
+    psm->current_state = st_ALARM;
+  }
+}
+
+static void sm_execute_sub(sm_t *psm){
+
+  printState(psm);
+  switch(sm_get_current_state(psm))
+  {
+  /*************** IDLE ***************/
     case st_IDLE:
-        /* State Actions*/
+    /*State Actions*/
     digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=false;
     flag_control=false;
 
-    //Serial.print("\rSampling: OFF\n");
-    //Serial.print("\rTemp. Control: OFF\n");
-    //Serial.print("\n\n\n");
+    Serial.print("\rSampling: OFF\n");
+    Serial.print("\rTemp. Control: OFF\n");
+    Serial.print("\n\n\n");
+
+    /*Transitions*/
+    if (psm->last_event == ev_START_HIGH)
+    {
+      psm->current_state = st_CYCLESTART;
+    }
     break;
 
     /************ CYCLESTART ************/
     case st_CYCLESTART:
-      /* State Actions*/
+    /*State Actions*/
     digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=true;
@@ -212,58 +261,64 @@ void sm_execute(sm_t *psm) {
 
     Serial.print("\rSampling: ON\n");
     Serial.print("\rTemp. Control: OFF\n");
+
+    /*Transitions*/
+    if (psm->last_event == ev_START_LOW)
+    {
+      psm->current_state = st_IDLE;
+    }
+    else if (psm->last_event == ev_PREHEAT_HIGH)
+    {
+      psm->current_state = st_PREHEATING;
+    }
+    else if ( psm->last_event == ev_SEALING_HIGH)
+    {
+      psm->current_state = st_SEAL;
+    }
     break;
 
     /************ PREHEATING ************/
     case st_PREHEATING:
-      /* State Actions*/
+    /*State Actions*/
     digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, HIGH);
     flag_sampling=true;
     flag_control=true;
-    flag_print=true;
 
     temp_setpoint=temp_preheat;
 
     Serial.print("\rSampling: ON\n");
     Serial.print("\rTemp. Control: ON\n");
+
+    /*Transitions*/
+    if (psm->last_event == ev_PREHEAT_LOW)
+    {
+      psm->current_state = st_CYCLESTART;
+    }
+    else if (psm->last_event == ev_SEALING_HIGH)
+    {
+      psm->current_state = st_SEAL;
+    }
     break;
 
     /************* SEALING **************/
     case st_SEAL:
-      /* State Actions*/
+    /*State Actions*/
     digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, HIGH);
     flag_sampling=true;
     flag_control=true;
-    flag_print=false;
 
     temp_setpoint=temp_user_setpoint;
 
     Serial.print("\rSampling: ON\n");
     Serial.print("\rTemp. Control: ON\n");
-    break;
 
-    /************* ALARM **************/
-    case st_ALARM:
-      /* State Actions*/
-    digitalWrite(IOpin_alarm, LOW);
-    digitalWrite(CTRLpin_OnOff, LOW);
-    flag_sampling=false;
-    flag_control=false;
-    Serial.print("\rSampling: OFF\n");
-    Serial.print("\rTemp. Control: OFF\n");
-    Serial.print("\rError Code: 123\n");
-    Serial.print("\n\n");
-
-    break;
-    /* Note: Maybe put ALARM inside default case */
-    default:
-    /* State Actions*/
-    digitalWrite(IOpin_alarm, LOW);
-    digitalWrite(CTRLpin_OnOff, LOW);
-    flag_sampling=false;
-    flag_control=false;
+    /*Transitions*/
+    if (psm->last_event == ev_SEALING_LOW)
+    {
+      psm->current_state = st_CYCLESTART;
+    }
     break;
   }
 }
@@ -282,11 +337,11 @@ static void _calcTemp_ISR() {
   voltage_rms = sqrt(sum_voltage / sample_count);
   current_rms = sqrt(sum_current / sample_count);
   resistance_rms = voltage_rms / current_rms;
-  Serial.println(resistance_rms);
+  //Serial.println(resistance_rms);
 
   /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
   temp_measured = (resistance_rms*T_slope-T_b);
-  Serial.println(temp_measured);
+  //Serial.println(temp_measured);
 
   if(temp_measured>MAX_TEMP)
   {
@@ -344,7 +399,7 @@ static int32_t sampleVoltage() {
   sample = analogRead(ANALOGpin_voltage);
   sample = (sample * 330000)>>ADC_RESOLUTION; /* [0 , 330000] V */
   sample = sample - 165000; /* [-165000 , 165000] V */
-  sample = sample * VOLTAGE_K / 100000; /* [-165000 , 165000] V  * 4114 / 100000 = [-6788 , 6788] V*100*/
+  sample = sample * VOLTAGE_K / 100000; /* [-165000 , 165000] V  * 4114 / 100000 = [-6788 , 6788] V*100 */
   return sample;
 }
 
@@ -432,7 +487,8 @@ void setup() {
   Timer_230V.begin(_calcTemp_ISR, PERIOD_230V);
 
   /*Initialize state machine*/
-  sm_init(&state_machine, st_OFF);
+  sm_init(&main_machine, st_OFF);
+  sm_init(&sub_machine, st_IDLE);
 
   Serial.print("\x1b[2J"); /*Clear screen*/
 }
@@ -455,21 +511,20 @@ void loop() {
       reset_state = digitalRead(IOpin_reset);
       if (reset_state == HIGH)
       {
-        sm_send_event(&state_machine, ev_RESET);
+        sm_send_event(&main_machine, ev_RESET);
       }
     }
     /* Enable pin*/
     if (digitalRead(IOpin_enable) != enable_state)
     {
-      Serial.println(enable_state);
       enable_state = digitalRead(IOpin_enable);
       if (enable_state == LOW)
       {
-        sm_send_event(&state_machine, ev_ENABLE_LOW);
+        sm_send_event(&main_machine, ev_ENABLE_LOW);
       }
       else
       {
-        sm_send_event(&state_machine, ev_ENABLE_HIGH);
+        sm_send_event(&main_machine, ev_ENABLE_HIGH);
       }
     }
     /* Start pin*/
@@ -479,11 +534,11 @@ void loop() {
       start_state = digitalRead(IOpin_start);
       if (start_state == LOW)
       {
-        sm_send_event(&state_machine, ev_START_LOW);
+        sm_send_event(&sub_machine, ev_START_LOW);
       }
       else
       {
-        sm_send_event(&state_machine, ev_START_HIGH);
+        sm_send_event(&sub_machine, ev_START_HIGH);
       }
     }
     /* Preheat pin*/
@@ -493,11 +548,11 @@ void loop() {
       preheat_state = digitalRead(IOpin_preheat);
       if (preheat_state == LOW)
       {
-        sm_send_event(&state_machine, ev_PREHEAT_LOW);
+        sm_send_event(&sub_machine, ev_PREHEAT_LOW);
       }
       else
       {
-        sm_send_event(&state_machine, ev_PREHEAT_HIGH);
+        sm_send_event(&sub_machine, ev_PREHEAT_HIGH);
       }
     }
     /* Sealing pin*/
@@ -507,30 +562,20 @@ void loop() {
       sealing_state = digitalRead(IOpin_sealing);
       if (sealing_state == LOW)
       {
-        sm_send_event(&state_machine, ev_SEALING_LOW);
+        sm_send_event(&sub_machine, ev_SEALING_LOW);
       }
       else
       {
-        sm_send_event(&state_machine, ev_SEALING_HIGH);
+        sm_send_event(&sub_machine, ev_SEALING_HIGH);
       }
     }
     count_polling = 0;
   }
 
-#if 1
-  /*Priting*/
-  if (flag_print==true) {
-    //Serial.print("\rTemperatura: ");
-    //Serial.println(temp_measured);
-    flag_print=false;
-  }
-#endif
-
   /*Execute state machine*/
   if (count_execute_sm >= PERIOD_MAIN)
   {
-    sm_next_event(&state_machine);
-    sm_execute(&state_machine);
+    sm_execute_main(&main_machine);
     count_execute_sm=0;
     /*Serial.print("\rExecute\n");*/
   }
@@ -542,7 +587,6 @@ void loop() {
     {
       temp_user_setpoint=(analogRead(ANALOGpin_pot)*MAX_TEMP)>>ADC_RESOLUTION ; /* Read pot value*/
     }
-    /*Note: How to handle critial sections?*/
     /*Serial.println(temp_user_setpoint);*/
     uint32_t sample;
     sample=sampleCurrent();
@@ -573,44 +617,41 @@ void loop() {
   uint8_t incomingByte = 0;
   if (Serial.available() > 0) {
     incomingByte = Serial.read(); /* Byte is received in DECIMAL format*/
-    /*Serial.print(incomingByte);*/
     switch (incomingByte) {
       case 'q':
-      sm_send_event(&state_machine, ev_ENABLE_HIGH);
+      sm_send_event(&main_machine, ev_ENABLE_HIGH);
       break;
       case 'w':
-      sm_send_event(&state_machine, ev_START_HIGH);
+      sm_send_event(&sub_machine, ev_START_HIGH);
       break;
       case 'e':
-      sm_send_event(&state_machine, ev_PREHEAT_HIGH);
+      sm_send_event(&sub_machine, ev_PREHEAT_HIGH);
       break;
       case 'r':
-      sm_send_event(&state_machine, ev_SEALING_HIGH);
+      sm_send_event(&sub_machine, ev_SEALING_HIGH);
       break;
       case 't':
-      sm_send_event(&state_machine, ev_SEALING_LOW);
+      sm_send_event(&sub_machine, ev_SEALING_LOW);
       break;
       case 'y':
-      sm_send_event(&state_machine, ev_PREHEAT_HIGH);
+      sm_send_event(&sub_machine, ev_PREHEAT_HIGH);
       break;
       case 'u':
-      sm_send_event(&state_machine, ev_SEALING_HIGH);
+      sm_send_event(&sub_machine, ev_SEALING_HIGH);
       break;
       case 'i':
-      sm_send_event(&state_machine, ev_SEALING_LOW);
+      sm_send_event(&sub_machine, ev_SEALING_LOW);
       break;
       case 'o':
-      sm_send_event(&state_machine, ev_OK_LOW);
+      sm_send_event(&main_machine, ev_OK_LOW);
       break;
       case 'p':
-      sm_send_event(&state_machine, ev_RESET);
+      sm_send_event(&main_machine, ev_RESET);
       break;
       case 'a':
-      sm_send_event(&state_machine, ev_ENABLE_LOW);
+      sm_send_event(&main_machine, ev_ENABLE_LOW);
       break;
     }
-    sm_next_event(&state_machine);
-    sm_execute(&state_machine);
-    //printState(&state_machine);
+    sm_execute_main(&main_machine);
   }
 }

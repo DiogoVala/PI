@@ -2,7 +2,7 @@
    File:   statemachine.h
    Author: Diogo Vala & Diogo Fernandes
 
-   Overview: Define state machine
+   Overview: Define state machines
 */
 
 #ifndef STATEMACHINE_H
@@ -10,37 +10,40 @@
 
 //State machine states
 typedef enum {
+  /*Main Machine*/
   st_OFF,
   st_ON,
+  st_ALARM,
+  
+  /*Sub machine*/
   st_IDLE,
   st_CYCLESTART,
   st_PREHEATING,
   st_RAISETEMP,
-  st_SEAL,
-  st_ALARM
+  st_SEAL
 } sm_state_t;
 
-#define sm_state_t int
-
-// State machine events
+//State machine events
 typedef enum {
   ev_NULL,
+
+  /*Main Machine*/
   ev_ENABLE_HIGH,
   ev_ENABLE_LOW,
+  ev_RESET,
+  ev_OK_LOW,
+
+  /*Sub machine*/
   ev_START_HIGH,
   ev_START_LOW,
   ev_PREHEAT_HIGH,
   ev_PREHEAT_LOW,
   ev_SEALING_HIGH,
   ev_SEALING_LOW,
-  ev_TEMPSET,
-  ev_RESET,
-  ev_OK_LOW,
 } sm_event_t;
 
 //State machine definition
-typedef struct sm_t
-{
+typedef struct{
   sm_state_t current_state;
   sm_state_t initial_state;
   sm_event_t last_event;
