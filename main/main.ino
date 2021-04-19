@@ -5,7 +5,6 @@
    Overview: Termorregulador Digital
 */
 /*TO DO
-    -Terminar a função sm_execute()
     -Device driver - Ethernet
     -Device driver - Display
     -Debouncer está com busy waiting
@@ -13,6 +12,13 @@
     -Error handling
     -Optimize: Reduce division/floats
 */
+
+/*
+ * Tested and working:
+ *  - PWM working at 32226. Controller saturates because there's no feedback.
+ *  - Polling working and states change accordingly.
+ */
+
 
 #include "statemachine.h"
 #include "error_codes.h"
@@ -46,6 +52,7 @@
 #define ADC_RESOLUTION 12
 
 /*PWM*/
+#define PWM_FREQUENCY 32226
 #define PWM_RESOLUTION 12
 #define MAX_DUTY_CYCLE 4095 // Change according to PWM_RESOLUTION
 #define MIN_DUTY_CYCLE 0
@@ -68,12 +75,12 @@
 #define PERIOD_MAIN 100
 #define PERIOD_230V 20000
 /* !!!These must be 2^n multiple of PERIOD_MAIN!!!*/
-#define PERIOD_POLLING 800
+#define PERIOD_POLLING 100
 #define PERIOD_SAMPLING 100
 #define PERIOD_DEBOUNCE 1600
 #define PERIOD_PRINT 100
 #define PERIOD_CONTROL 1600
-#define PERIOD_SM_EXECUTE 25400
+#define PERIOD_SM_EXECUTE 25600
 
 /* Constants used for counting in timer ISR*/
 /* Example (PERIOD_DEBOUNCE):
@@ -151,8 +158,8 @@ void sm_execute(sm_t *psm) {
   /* To do:
     -ações de cada estado
   */
-  Serial.print("\r\x1b[2J");
-  Serial.print("\rTermorregulador Digital\n");
+  //Serial.print("\r\x1b[2J");
+  //Serial.print("\rTermorregulador Digital\n");
   printState(psm);
   switch (sm_get_current_state(psm))
   {
@@ -164,9 +171,9 @@ void sm_execute(sm_t *psm) {
     flag_sampling=false;
     flag_control=false;
 
-    Serial.print("\rSampling: OFF\n");
-    Serial.print("\rTemp. Control: OFF\n");
-    Serial.print("\n\n\n");
+    //Serial.print("\rSampling: OFF\n");
+    //Serial.print("\rTemp. Control: OFF\n");
+    //Serial.print("\n\n\n");
     break;
 
     /*************** ON ***************/
@@ -177,9 +184,9 @@ void sm_execute(sm_t *psm) {
     flag_sampling=false;
     flag_control=false;
 
-    Serial.print("\rSampling: OFF\n");
-    Serial.print("\rTemp. Control: OFF\n");
-    Serial.print("\n\n\n");
+    //Serial.print("\rSampling: OFF\n");
+    //Serial.print("\rTemp. Control: OFF\n");
+    //Serial.print("\n\n\n");
     break;
 
     /*************** IDLE ***************/
@@ -190,9 +197,9 @@ void sm_execute(sm_t *psm) {
     flag_sampling=false;
     flag_control=false;
 
-    Serial.print("\rSampling: OFF\n");
-    Serial.print("\rTemp. Control: OFF\n");
-    Serial.print("\n\n\n");
+    //Serial.print("\rSampling: OFF\n");
+    //Serial.print("\rTemp. Control: OFF\n");
+    //Serial.print("\n\n\n");
     break;
 
     /************ CYCLESTART ************/
@@ -229,7 +236,7 @@ void sm_execute(sm_t *psm) {
     digitalWrite(CTRLpin_OnOff, HIGH);
     flag_sampling=true;
     flag_control=true;
-    flag_print=true;
+    flag_print=false;
 
     temp_setpoint=temp_user_setpoint;
 
@@ -259,7 +266,6 @@ void sm_execute(sm_t *psm) {
     flag_control=false;
     break;
   }
-  /*DEMO*/
 }
 
 /* 20ms-periodic to calculate RMS and temperature */
@@ -276,11 +282,11 @@ static void _calcTemp_ISR() {
   voltage_rms = sqrt(sum_voltage / sample_count);
   current_rms = sqrt(sum_current / sample_count);
   resistance_rms = voltage_rms / current_rms;
-  //Serial.println(resistance_rms);
+  Serial.println(resistance_rms);
 
   /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
   temp_measured = (resistance_rms*T_slope-T_b);
-  //Serial.println(temp_measured);
+  Serial.println(temp_measured);
 
   if(temp_measured>MAX_TEMP)
   {
@@ -418,10 +424,11 @@ void setup() {
 
   /*PWM initialization*/
   analogWriteResolution(PWM_RESOLUTION); /* With 12 bits, the frequency is 36621.09 Hz (teensy 4.1 doc)*/
+  analogWriteFrequency(CTRLpin_PWM, PWM_FREQUENCY);
   analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
   /*Start Timer ISR*/
- Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
+  Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
   Timer_230V.begin(_calcTemp_ISR, PERIOD_230V);
 
   /*Initialize state machine*/
@@ -433,11 +440,11 @@ void setup() {
 void loop() {
 
   /*Old state of input signals for polling*/
-  static uint8_t enable_state;
-  static uint8_t start_state;
-  static uint8_t preheat_state;
-  static uint8_t sealing_state;
-  static uint8_t reset_state;
+  static uint8_t enable_state = LOW;
+  static uint8_t start_state = LOW;
+  static uint8_t preheat_state = LOW;
+  static uint8_t sealing_state = LOW;
+  static uint8_t reset_state = LOW;
 
   /* Polling*/
   if (count_polling >= PERIOD_MAIN)
@@ -454,7 +461,7 @@ void loop() {
     /* Enable pin*/
     if (digitalRead(IOpin_enable) != enable_state)
     {
-      debounce();
+      Serial.println(enable_state);
       enable_state = digitalRead(IOpin_enable);
       if (enable_state == LOW)
       {
@@ -468,7 +475,7 @@ void loop() {
     /* Start pin*/
     if (digitalRead(IOpin_start) != start_state)
     {
-      debounce();
+      //debounce();
       start_state = digitalRead(IOpin_start);
       if (start_state == LOW)
       {
@@ -482,7 +489,7 @@ void loop() {
     /* Preheat pin*/
     if (digitalRead(IOpin_preheat) != preheat_state)
     {
-      debounce();
+      //debounce();
       preheat_state = digitalRead(IOpin_preheat);
       if (preheat_state == LOW)
       {
@@ -496,7 +503,7 @@ void loop() {
     /* Sealing pin*/
     if (digitalRead(IOpin_sealing) != sealing_state)
     {
-      debounce();
+      //debounce();
       sealing_state = digitalRead(IOpin_sealing);
       if (sealing_state == LOW)
       {
@@ -559,7 +566,7 @@ void loop() {
   }
   else if (count_control >= PERIOD_MAIN && flag_control == false)
   {
-    analogWrite(CTRLpin_PWM, 0); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
+    analogWrite(CTRLpin_PWM, MAX_DUTY_CYCLE/2); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
   }
 
   /* Keyboard Simulation to test state machine*/
