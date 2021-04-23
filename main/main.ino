@@ -157,8 +157,8 @@ static void _timer_ISR() {
 
 static void sm_execute_main(sm_t *psm) {
 
-  Serial.print("\r\x1b[2J"); /*Clear screen*/
-  Serial.print("\rTermorregulador Digital\n");
+  //Serial.print("\r\x1b[2J"); /*Clear screen*/
+  //Serial.print("\rTermorregulador Digital\n");
   printState(psm);
 
   switch (sm_get_current_state(psm))
@@ -186,6 +186,7 @@ static void sm_execute_main(sm_t *psm) {
     if (psm->last_event == ev_ENABLE_LOW)
     {
       psm->current_state = st_OFF;
+      sm_init(&sub_machine, st_IDLE);
     }
     if (psm->last_event == ev_RESET)
     {
@@ -240,10 +241,6 @@ static void sm_execute_sub(sm_t *psm){
     flag_sampling=false;
     flag_control=false;
 
-    Serial.print("\rSampling: OFF\n");
-    Serial.print("\rTemp. Control: OFF\n");
-    Serial.print("\n\n\n");
-
     /*Transitions*/
     if (psm->last_event == ev_START_HIGH)
     {
@@ -258,9 +255,6 @@ static void sm_execute_sub(sm_t *psm){
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=true;
     flag_control=false;
-
-    Serial.print("\rSampling: ON\n");
-    Serial.print("\rTemp. Control: OFF\n");
 
     /*Transitions*/
     if (psm->last_event == ev_START_LOW)
@@ -287,9 +281,6 @@ static void sm_execute_sub(sm_t *psm){
 
     temp_setpoint=temp_preheat;
 
-    Serial.print("\rSampling: ON\n");
-    Serial.print("\rTemp. Control: ON\n");
-
     /*Transitions*/
     if (psm->last_event == ev_PREHEAT_LOW)
     {
@@ -310,9 +301,6 @@ static void sm_execute_sub(sm_t *psm){
     flag_control=true;
 
     temp_setpoint=temp_user_setpoint;
-
-    Serial.print("\rSampling: ON\n");
-    Serial.print("\rTemp. Control: ON\n");
 
     /*Transitions*/
     if (psm->last_event == ev_SEALING_LOW)
@@ -511,6 +499,7 @@ void loop() {
       reset_state = digitalRead(IOpin_reset);
       if (reset_state == HIGH)
       {
+        Serial.print("\rCHEGUEI_1\n");
         sm_send_event(&main_machine, ev_RESET);
       }
     }
@@ -566,6 +555,7 @@ void loop() {
       }
       else
       {
+        Serial.print("\rCHEGUEI\n");
         sm_send_event(&sub_machine, ev_SEALING_HIGH);
       }
     }
@@ -631,25 +621,10 @@ void loop() {
       sm_send_event(&sub_machine, ev_SEALING_HIGH);
       break;
       case 't':
-      sm_send_event(&sub_machine, ev_SEALING_LOW);
+      sm_send_event(&sub_machine, ev_RESET);
       break;
       case 'y':
-      sm_send_event(&sub_machine, ev_PREHEAT_HIGH);
-      break;
-      case 'u':
-      sm_send_event(&sub_machine, ev_SEALING_HIGH);
-      break;
-      case 'i':
       sm_send_event(&sub_machine, ev_SEALING_LOW);
-      break;
-      case 'o':
-      sm_send_event(&main_machine, ev_OK_LOW);
-      break;
-      case 'p':
-      sm_send_event(&main_machine, ev_RESET);
-      break;
-      case 'a':
-      sm_send_event(&main_machine, ev_ENABLE_LOW);
       break;
     }
     sm_execute_main(&main_machine);
