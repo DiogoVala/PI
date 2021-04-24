@@ -23,6 +23,7 @@
 
 #include "statemachine.h"
 #include "error_codes.h"
+#include "ethernet.h"
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
@@ -107,9 +108,9 @@ static volatile int64_t sum_voltage = 0; /* Storage of voltage samples*/
 
 /*Controlo*/
 static volatile uint16_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint to be applied to control routine*/
-static volatile uint16_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
-static volatile uint16_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
-static volatile uint16_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
+volatile uint16_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
+volatile uint16_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
+volatile uint16_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
 
 /*Timers*/
 IntervalTimer Timer_Main; /* Interrupt timer*/
@@ -159,7 +160,7 @@ static void sm_execute_main(sm_t *psm) {
 
   //Serial.print("\r\x1b[2J"); /*Clear screen*/
   //Serial.print("\rTermorregulador Digital\n");
-  printState(psm);
+  //printState(psm);
 
   switch (sm_get_current_state(psm))
   {
@@ -191,6 +192,7 @@ static void sm_execute_main(sm_t *psm) {
     if (psm->last_event == ev_RESET)
     {
       sm_init(&sub_machine, st_IDLE);
+      psm->last_event = ev_NULL;
     }
 
     sm_execute_sub(&sub_machine);
@@ -211,6 +213,7 @@ static void sm_execute_main(sm_t *psm) {
     if (psm->last_event == ev_ENABLE_LOW)
     {
       psm->current_state = st_OFF;
+      sm_init(&sub_machine, st_IDLE);
     }
     if (psm->last_event == ev_RESET)
     {
@@ -230,7 +233,7 @@ static void sm_execute_main(sm_t *psm) {
 
 static void sm_execute_sub(sm_t *psm){
 
-  printState(psm);
+  //printState(psm);
   switch(sm_get_current_state(psm))
   {
   /*************** IDLE ***************/
@@ -471,17 +474,21 @@ void setup() {
   analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
   /*Start Timer ISR*/
-  Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
-  Timer_230V.begin(_calcTemp_ISR, PERIOD_230V);
+  //Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
+  //Timer_230V.begin(_calcTemp_ISR, PERIOD_230V);
 
   /*Initialize state machine*/
   sm_init(&main_machine, st_OFF);
   sm_init(&sub_machine, st_IDLE);
 
-  Serial.print("\x1b[2J"); /*Clear screen*/
+  /*Initialize ethernet module and API*/
+  InitEthernet();
+  
+  //Serial.print("\x1b[2J"); /*Clear screen*/
 }
 
 void loop() {
+  ListenClient();
 
   /*Old state of input signals for polling*/
   static uint8_t enable_state = LOW;
@@ -494,12 +501,11 @@ void loop() {
   if (count_polling >= PERIOD_MAIN)
   {
     /* Reset pin*/
-    if (digitalRead(IOpin_reset) == HIGH && reset_state == LOW)
+    if (digitalRead(IOpin_reset) != reset_state)
     {
       reset_state = digitalRead(IOpin_reset);
       if (reset_state == HIGH)
       {
-        Serial.print("\rCHEGUEI_1\n");
         sm_send_event(&main_machine, ev_RESET);
       }
     }
@@ -555,7 +561,6 @@ void loop() {
       }
       else
       {
-        Serial.print("\rCHEGUEI\n");
         sm_send_event(&sub_machine, ev_SEALING_HIGH);
       }
     }
@@ -588,7 +593,6 @@ void loop() {
     sample_count++;
 
     count_sampling = 0;
-    //Serial.print("\rSampling\n");
   }
 
   /*Control*/
@@ -596,7 +600,6 @@ void loop() {
   {
     controlTemp(temp_setpoint);
     count_control = 0;
-    //Serial.print("\rControl\n");
   }
   else if (count_control >= PERIOD_MAIN && flag_control == false)
   {
@@ -611,22 +614,30 @@ void loop() {
       case 'q':
       sm_send_event(&main_machine, ev_ENABLE_HIGH);
       break;
+      case 'a':
+      sm_send_event(&main_machine, ev_ENABLE_LOW);
+      break;
       case 'w':
       sm_send_event(&sub_machine, ev_START_HIGH);
+      break;
+      case 's':
+      sm_send_event(&sub_machine, ev_START_LOW);
       break;
       case 'e':
       sm_send_event(&sub_machine, ev_PREHEAT_HIGH);
       break;
+      case 'd':
+      sm_send_event(&sub_machine, ev_PREHEAT_LOW);
+      break;
       case 'r':
       sm_send_event(&sub_machine, ev_SEALING_HIGH);
       break;
-      case 't':
-      sm_send_event(&sub_machine, ev_RESET);
-      break;
-      case 'y':
+      case 'f':
       sm_send_event(&sub_machine, ev_SEALING_LOW);
       break;
+      case 't':
+      sm_send_event(&main_machine, ev_RESET);
+      break;
     }
-    sm_execute_main(&main_machine);
   }
 }
