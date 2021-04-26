@@ -1,20 +1,20 @@
 
-#include <SPI.h>
+//#include <SPI.h>
 #include <NativeEthernet.h>
 #include "ethernet.h"
 #include "ethernetAPI.h"
 
 // Enter a MAC address for your controller below.
-static byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
+byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
 
 // IP address in case DHCP fails
-static IPAddress ip(192,168,2,2);
+IPAddress ip(192,168,2,2);
 
 // Ethernet server
-static EthernetServer server(80);
+EthernetServer server(80);
 
 // Create aREST instance
-static aREST rest = aREST();
+aREST rest = aREST();
 
 // Custom functions accessible by the API
 static void set_temp_seal(String setpoint) {
@@ -31,10 +31,6 @@ static int read_temp(){
 
 void InitEthernet(void)
 {
-  // Start Serial
-  Serial.begin(BAUDRATE);
-  Serial.print("\x1b[2J"); /*Clear screen*/
-
   // Function to be exposed
   rest.function("set_seal",set_temp_seal);
   rest.function("set_preheat",set_temp_preheat);
@@ -59,6 +55,7 @@ void ListenClient(){
   // listen for incoming clients
   EthernetClient client = server.available();
   rest.handle(client);
+  Serial.println("\rclient\n");
 }
 
 

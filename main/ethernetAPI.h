@@ -1,5 +1,5 @@
-#ifndef aRest_h
-#define aRest_h
+#ifndef ETHERNET_API_H
+#define ETHERNET_API_H
 
 // Include Arduino header
 #include "Arduino.h"
@@ -36,8 +36,6 @@
 
 // Default number of max. exposed functions
 #define NUMBER_FUNCTIONS 5
-
-
 
 #ifdef AREST_BUFFER_SIZE
   #define OUTPUT_BUFFER_SIZE AREST_BUFFER_SIZE
@@ -277,7 +275,6 @@ void process(char c) {
 
   answer = "";
 }
-
 
 // Modifies arguments in place
 void urldecode(String &arguments) {

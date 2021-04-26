@@ -18,6 +18,7 @@
  *  - PWM working at 32226. Controller saturates because there's no feedback.
  *  - Polling working and states change accordingly.
  *  - Temperature calculation working
+ *  - State machine working with external signals
  */
 
 
@@ -48,7 +49,7 @@
 #define HIGH 1
 
 /*Uart*/
-#define BAUD_RATE 9600
+#define UART_BAUDRATE 9600
 
 /*ADC*/
 #define ADC_RESOLUTION 12
@@ -444,7 +445,7 @@ void setup() {
     Parity    - None
     Stop bits - 1
   */
-  Serial.begin(BAUD_RATE);
+  Serial.begin(UART_BAUDRATE);
 
   /*Analog Pins*/
   analogReadRes(ADC_RESOLUTION);
@@ -474,8 +475,8 @@ void setup() {
   analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
   /*Start Timer ISR*/
-  //Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
-  //Timer_230V.begin(_calcTemp_ISR, PERIOD_230V);
+  Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
+  Timer_230V.begin(_calcTemp_ISR, PERIOD_230V);
 
   /*Initialize state machine*/
   sm_init(&main_machine, st_OFF);
@@ -490,7 +491,7 @@ void setup() {
 void loop() {
   ListenClient();
 
-  /*Old state of input signals for polling*/
+  /*Old states of input signals for polling*/
   static uint8_t enable_state = LOW;
   static uint8_t start_state = LOW;
   static uint8_t preheat_state = LOW;
