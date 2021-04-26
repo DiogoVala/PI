@@ -161,7 +161,7 @@ static void sm_execute_main(sm_t *psm) {
 
   //Serial.print("\r\x1b[2J"); /*Clear screen*/
   //Serial.print("\rTermorregulador Digital\n");
-  //printState(psm);
+  printState(psm);
 
   switch (sm_get_current_state(psm))
   {
@@ -234,7 +234,7 @@ static void sm_execute_main(sm_t *psm) {
 
 static void sm_execute_sub(sm_t *psm){
 
-  //printState(psm);
+  printState(psm);
   switch(sm_get_current_state(psm))
   {
   /*************** IDLE ***************/
@@ -329,11 +329,9 @@ static void _calcTemp_ISR() {
   voltage_rms = sqrt(sum_voltage / sample_count);
   current_rms = sqrt(sum_current / sample_count);
   resistance_rms = voltage_rms / current_rms;
-  //Serial.println(resistance_rms);
-
+ 
   /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
   temp_measured = (resistance_rms*T_slope-T_b);
-  //Serial.println(temp_measured);
 
   if(temp_measured>MAX_TEMP)
   {
@@ -474,6 +472,9 @@ void setup() {
   analogWriteFrequency(CTRLpin_PWM, PWM_FREQUENCY);
   analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
+  /*Initialize ethernet module and API*/
+  InitEthernet();
+
   /*Start Timer ISR*/
   Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
   Timer_230V.begin(_calcTemp_ISR, PERIOD_230V);
@@ -481,9 +482,6 @@ void setup() {
   /*Initialize state machine*/
   sm_init(&main_machine, st_OFF);
   sm_init(&sub_machine, st_IDLE);
-
-  /*Initialize ethernet module and API*/
-  InitEthernet();
   
   //Serial.print("\x1b[2J"); /*Clear screen*/
 }
@@ -584,7 +582,7 @@ void loop() {
       temp_user_setpoint=(analogRead(ANALOGpin_pot)*MAX_TEMP)>>ADC_RESOLUTION ; /* Read pot value*/
     }
     /*Serial.println(temp_user_setpoint);*/
-    uint32_t sample;
+    int32_t sample;
     sample=sampleCurrent();
     sum_current += sample*sample;
 

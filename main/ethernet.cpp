@@ -17,15 +17,15 @@ EthernetServer server(80);
 aREST rest = aREST();
 
 // Custom functions accessible by the API
-static void set_temp_seal(String setpoint) {
+void set_temp_seal(String setpoint) {
   temp_user_setpoint = setpoint.toInt();
 }
 
-static void set_temp_preheat(String preheat) {
+void set_temp_preheat(String preheat) {
   temp_preheat = preheat.toInt();
 }
 
-static int read_temp(){
+int read_temp(){
   return temp_measured;
 }
 
@@ -36,26 +36,27 @@ void InitEthernet(void)
   rest.function("set_preheat",set_temp_preheat);
   rest.function("read_temp",read_temp);
 
+
   // Give name & ID to the device (ID should be 6 characters long)
-  rest.set_id("1");
-  rest.set_name("Termorregulador Digital");
+  rest.set_id("0001");
+  rest.set_name("Termorregulador");
 
   // Start the Ethernet connection and the server
   if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
+    //Serial.println("Failed to configure Ethernet using DHCP");
     Ethernet.begin(mac, ip);
   }
 
   server.begin();
-  Serial.print("server is at ");
-  Serial.println(Ethernet.localIP());
+  //Serial.print("server is at ");
+  //Serial.println(Ethernet.localIP());
 }
 
 void ListenClient(){
   // listen for incoming clients
   EthernetClient client = server.available();
   rest.handle(client);
-  Serial.println("\rclient\n");
+  //Serial.println("\rclient\n");
 }
 
 
