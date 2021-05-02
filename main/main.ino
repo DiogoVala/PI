@@ -25,6 +25,7 @@
 #include "statemachine.h"
 #include "error_codes.h"
 #include "ethernet.h"
+#include "DisplayDriver.h"  
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
@@ -108,10 +109,10 @@ static volatile int64_t sum_current = 0; /* Storage of current samples*/
 static volatile int64_t sum_voltage = 0; /* Storage of voltage samples*/
 
 /*Controlo*/
-static volatile uint16_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint to be applied to control routine*/
-volatile uint16_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
-volatile uint16_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
-volatile uint16_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
+static volatile uint32_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint to be applied to control routine*/
+volatile uint32_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
+volatile uint32_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
+volatile uint32_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
 
 /*Timers*/
 IntervalTimer Timer_Main; /* Interrupt timer*/
@@ -159,8 +160,8 @@ static void _timer_ISR() {
 
 static void sm_execute_main(sm_t *psm) {
 
-  //Serial.print("\r\x1b[2J"); /*Clear screen*/
-  //Serial.print("\rTermorregulador Digital\n");
+  Serial.print("\r\x1b[2J"); /*Clear screen*/
+  Serial.print("\rTermorregulador Digital\n");
   printState(psm);
 
   switch (sm_get_current_state(psm))
@@ -444,6 +445,8 @@ void setup() {
     Stop bits - 1
   */
   Serial.begin(UART_BAUDRATE);
+  Serial.print("\x1b[2J"); /*Clear screen*/
+  Serial.print("\r\nBooting...\n");
 
   /*Analog Pins*/
   analogReadRes(ADC_RESOLUTION);
@@ -473,7 +476,7 @@ void setup() {
   analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
   /*Initialize ethernet module and API*/
-  InitEthernet();
+  //InitEthernet();
 
   /*Start Timer ISR*/
   Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
@@ -483,12 +486,17 @@ void setup() {
   sm_init(&main_machine, st_OFF);
   sm_init(&sub_machine, st_IDLE);
   
-  //Serial.print("\x1b[2J"); /*Clear screen*/
+  /*Initialize Display*/
+  InitDisplay();
+
+  Serial.print("\r\nDone.\n");
 }
 
 void loop() {
-  ListenClient();
-
+  //ListenClient();
+  checkDisplayEvent();
+  sendGraphVal();
+#if 0
   /*Old states of input signals for polling*/
   static uint8_t enable_state = LOW;
   static uint8_t start_state = LOW;
@@ -639,4 +647,5 @@ void loop() {
       break;
     }
   }
+#endif
 }
