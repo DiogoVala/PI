@@ -7,7 +7,7 @@ elapsedMillis timeElapsed;
 void loop() {
   eventCheck();
   if(timeElapsed>100){
-    updateGraph();
+    updateGraphs();
     timeElapsed=0;
   }
   

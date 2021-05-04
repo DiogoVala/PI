@@ -92,7 +92,7 @@ void InitDisplay() {
 
 }
 
-void updateGraph(){
+void updateGraphs(){
   uint32_t pot = 0;
   if(current_page==3)
     pot=analogRead(14);
