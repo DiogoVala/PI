@@ -334,9 +334,9 @@ bool send_command(bool headers, bool decodeArgs) {
     int result = functions[value](arguments);
 
     // Send feedback to client
-    //addToBufferF(F("<p id=\"temp\">"));
-    addToBuffer(result, true);
-    //addToBufferF(F("</p>"));
+    addToBufferF(F("{\"return_value\": "));
+    addToBuffer(value, true);
+    addToBufferF(F("}"));
   }
 
   if (command == 'r' || command == 'u') {
@@ -351,25 +351,7 @@ bool send_command(bool headers, bool decodeArgs) {
 
 
 virtual void root_answer() {
-
-  if (LIGHTWEIGHT) {
-    addStringToBuffer(id.c_str(), false);
-  }
-  else {
-    addToBufferF(F("{\"variables\": {"));
-
-    for (uint8_t i = 0; i < variables_index; i++){
-      addVariableToBuffer(i);
-
-      if (i < variables_index - 1) {
-        addToBufferF(F(", "));
-      }
-    }
-
-    addToBufferF(F("}, "));
-  }
-
-  // End
+  addToBufferF(F("{"));
   addHardwareToBuffer();
 }
 
@@ -502,7 +484,7 @@ void addVariableToBuffer(uint8_t index) {
 
 void addHardwareToBuffer() {
 
-  addToBufferF(F(", \"name\": "));
+  addToBufferF(F("\"name\": "));
   addStringToBuffer(name, true);
   addToBufferF(F(", \"hardware\": "));
   addStringToBuffer(HARDWARE, true);

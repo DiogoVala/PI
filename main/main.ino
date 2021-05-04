@@ -25,7 +25,6 @@
 #include "statemachine.h"
 #include "error_codes.h"
 #include "ethernet.h"
-#include "DisplayDriver.h"  
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
@@ -446,8 +445,7 @@ void setup() {
   */
   Serial.begin(UART_BAUDRATE);
   Serial.print("\x1b[2J"); /*Clear screen*/
-  Serial.print("\r\nBooting...\n");
-
+  Serial.println("Boot...");
   /*Analog Pins*/
   analogReadRes(ADC_RESOLUTION);
   pinMode(ANALOGpin_pot, INPUT);
@@ -476,7 +474,7 @@ void setup() {
   analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
   /*Initialize ethernet module and API*/
-  //InitEthernet();
+  InitEthernet();
 
   /*Start Timer ISR*/
   Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
@@ -485,18 +483,13 @@ void setup() {
   /*Initialize state machine*/
   sm_init(&main_machine, st_OFF);
   sm_init(&sub_machine, st_IDLE);
-  
-  /*Initialize Display*/
-  InitDisplay();
-
-  Serial.print("\r\nDone.\n");
+  Serial.println("Done.");
+  //
 }
 
 void loop() {
-  //ListenClient();
-  checkDisplayEvent();
-  sendGraphVal();
-#if 0
+  ListenClient();
+
   /*Old states of input signals for polling*/
   static uint8_t enable_state = LOW;
   static uint8_t start_state = LOW;
@@ -647,5 +640,4 @@ void loop() {
       break;
     }
   }
-#endif
 }
