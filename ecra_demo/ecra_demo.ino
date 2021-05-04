@@ -3,8 +3,12 @@
 void setup() {
   InitDisplay();
 }
-
+elapsedMillis timeElapsed;
 void loop() {
   eventCheck();
-  updateGraph();
+  if(timeElapsed>100){
+    updateGraph();
+    timeElapsed=0;
+  }
+  
 }
