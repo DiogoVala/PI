@@ -4,6 +4,7 @@
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
         <title>Controlo Heatband</title>
         <link rel="stylesheet" href="style.css">    <!-- isto é para ligar ao ficheiro CSS -->
+        <script src="plotly.min.js"></script>
     </head>
 
     <body>
@@ -39,14 +40,38 @@
                     <h1>
                         Gr&aacutefico 3
                     </h1>
-                </div>
-                
-                <div class="info">
-                
 
-              </div>
+                    <p>W</p>
+                </div>  
+
+                <div id="chart"></div>
+
+                <script>
+                    function getData() {
+                        return Math.random()*5;
+                    }  
+
+                    Plotly.plot('chart',[{
+                        y:[getData()],
+                        type:'line'
+                    }]);
+
+                    var cnt = 0;
+
+                    setInterval(function(){
+                        Plotly.extendTraces('chart',{ y:[[getData()]]}, [0]);
+                        cnt++;
+                        
+                        if(cnt > 10) {
+                            Plotly.relayout('chart',{
+                                xaxis: {
+                                    range: [cnt-10,cnt]
+                                }
+                            });
+                        }
+                    },1000);    // isto vai atualizar o gráfico de 1 em 1 seg
+                </script>
             </div>
         </div>        
     </body>
-
 </html>
