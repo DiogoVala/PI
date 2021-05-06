@@ -1,5 +1,4 @@
-#ifndef ETHERNET_H
-#define ETHERNET_H
+#include <Nextion.h> 
 
 extern volatile uint32_t temp_user_setpoint;
 extern volatile uint32_t temp_preheat;
@@ -7,8 +6,6 @@ extern volatile uint32_t temp_measured;
 extern volatile float current_rms;
 extern volatile float voltage_rms;
 
-void InitEthernet(void);
-
-void ListenClient();
-
-#endif
+void InitDisplay();
+void updateGraphs();
+void eventCheck();

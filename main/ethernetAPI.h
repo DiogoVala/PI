@@ -334,9 +334,7 @@ bool send_command(bool headers, bool decodeArgs) {
     int result = functions[value](arguments);
 
     // Send feedback to client
-    addToBufferF(F("{\"return_value\": "));
-    addToBuffer(value, true);
-    addToBufferF(F("}"));
+    addToBuffer(result, true);
   }
 
   if (command == 'r' || command == 'u') {

@@ -30,13 +30,22 @@ int read_temp(){
   return temp_measured;
 }
 
+float read_voltage(){
+  return voltage_rms;
+}
+
+float read_current(){
+  return current_rms;
+}
+
 void InitEthernet(void)
 {
   // Function to be exposed
   rest.function("set_seal",set_temp_seal);
   rest.function("set_preheat",set_temp_preheat);
   rest.function("read_temp",read_temp);
-
+  rest.function("read_voltage",read_voltage);
+  rest.function("read_current",read_current);
 
   // Give name & ID to the device (ID should be 6 characters long)
   rest.set_id("0001");

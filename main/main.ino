@@ -25,6 +25,7 @@
 #include "statemachine.h"
 #include "error_codes.h"
 #include "ethernet.h"
+#include "DisplayDriver.h"
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
@@ -84,6 +85,7 @@
 #define PERIOD_PRINT 100
 #define PERIOD_CONTROL 1600
 #define PERIOD_SM_EXECUTE 200
+#define PERIOD_GRAPHS 1000
 
 /* Constants used for counting in timer ISR*/
 /* Example (PERIOD_DEBOUNCE):
@@ -112,6 +114,8 @@ static volatile uint32_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint t
 volatile uint32_t temp_user_setpoint = 0; /* 0 to ~400º - setpoint to be defined by user*/
 volatile uint32_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
 volatile uint32_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
+volatile float current_rms = 0;
+volatile float voltage_rms = 0;
 
 /*Timers*/
 IntervalTimer Timer_Main; /* Interrupt timer*/
@@ -123,6 +127,7 @@ static volatile uint32_t count_debounce = 0; /*Note: Not used*/
 static volatile uint32_t count_print = 0;
 static volatile uint32_t count_control = 0;
 static volatile uint32_t count_execute_sm = 0;
+static volatile uint32_t count_graphs = 0;
 
 /*flags*/
 static volatile bool flag_control = false; /* Flag to signal that the control routine can be called*/
@@ -155,12 +160,24 @@ static void _timer_ISR() {
 
   if(!(count_main&COUNT_EXECUTE))
     count_execute_sm++;
+
+  count_graphs++;
 }
 
 static void sm_execute_main(sm_t *psm) {
 
   Serial.print("\r\x1b[2J"); /*Clear screen*/
   Serial.print("\rTermorregulador Digital\n");
+  Serial.print("\rPreheat: ");
+  Serial.println(temp_preheat);
+  Serial.print("\rSealing: ");
+  Serial.println(temp_user_setpoint);
+  Serial.print("\rTemp: ");
+  Serial.println(temp_measured);
+  Serial.print("\rVoltage: ");
+  Serial.println(voltage_rms);
+  Serial.print("\rCurrent: ");
+  Serial.println(current_rms);
   printState(psm);
 
   switch (sm_get_current_state(psm))
@@ -318,8 +335,6 @@ static void sm_execute_sub(sm_t *psm){
 /* 20ms-periodic to calculate RMS and temperature */
 static void _calcTemp_ISR() {
 
-  static float current_rms = 0;
-  static float voltage_rms = 0;
   static float resistance_rms = 0;
 
   /* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
@@ -445,7 +460,7 @@ void setup() {
   */
   Serial.begin(UART_BAUDRATE);
   Serial.print("\x1b[2J"); /*Clear screen*/
-  Serial.println("Boot...");
+  Serial.println("Starting...");
   /*Analog Pins*/
   analogReadRes(ADC_RESOLUTION);
   pinMode(ANALOGpin_pot, INPUT);
@@ -475,6 +490,7 @@ void setup() {
 
   /*Initialize ethernet module and API*/
   InitEthernet();
+  InitDisplay();
 
   /*Start Timer ISR*/
   Timer_Main.begin(_timer_ISR, PERIOD_MAIN);
@@ -489,7 +505,8 @@ void setup() {
 
 void loop() {
   ListenClient();
-
+  eventCheck();
+  
   /*Old states of input signals for polling*/
   static uint8_t enable_state = LOW;
   static uint8_t start_state = LOW;
@@ -604,6 +621,12 @@ void loop() {
   else if (count_control >= PERIOD_MAIN && flag_control == false)
   {
     analogWrite(CTRLpin_PWM, MAX_DUTY_CYCLE/2); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
+  }
+
+  if(count_graphs >= PERIOD_GRAPHS)
+  {
+    updateGraphs();
+    count_graphs = 0;
   }
 
   /* Keyboard Simulation to test state machine*/
