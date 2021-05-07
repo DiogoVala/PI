@@ -1,3 +1,7 @@
+#ifndef DISPLAYDRIVER_H
+#define DISPLAYDRIVER_H
+
+
 #include <Nextion.h> 
 
 extern volatile uint32_t temp_sealing;
@@ -7,8 +11,10 @@ extern volatile float current_rms;
 extern volatile float voltage_rms;
 
 void InitDisplay();
-void updateHome(int x);
+void updateHome(int state, int input_start,int input_preheat, int input_sealing);
 void updateGraphs();
 void eventCheck();
 void errorPage();
 void resetDisplay();
+
+#endif

@@ -1,4 +1,5 @@
 #include "DisplayDriver.h"
+#include "config.h"
 
 volatile char state[][20]=
 { "IDLE", 
@@ -99,7 +100,7 @@ void Graph3PushCallback(void *ptr)
 
 void InitDisplay() {
   // put your setup code here, to run once:
-  Serial1.begin(115200);  // Display Baudrate
+  Serial1.begin(DISPLAY_BAUDRATE);  // Display Baudrate
 
   btn_validate.attachPop(btn_validate_PopCallback);
   page_home.attachPush(HomePushCallback);  // Page press event
@@ -111,7 +112,7 @@ void InitDisplay() {
   resetDisplay();
 }
 
-void updateHome(int state){
+void updateHome(int state, int input_start,int input_preheat, int input_sealing){
   if(current_page==1)
   {
     Serial1.print("t2.txt=");  // This is sent to the nextion display to set what object name (before the dot) and what atribute (after the dot) are you going to change.
@@ -153,6 +154,36 @@ void updateHome(int state){
 
     Serial1.print("n2.val=");
     Serial1.print(temp_sealing);
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+
+    if(input_start == 1){
+      Serial1.print("t6.bco=47090");
+    }
+    else{
+      Serial1.print("t6.bco=58417");
+    }
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+
+    if(input_preheat == 1){
+      Serial1.print("t7.bco=47090");
+    }
+    else{
+      Serial1.print("t7.bco=58417");
+    }
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+
+    if(input_sealing == 1){
+      Serial1.print("t8.bco=47090");
+    }
+    else{
+      Serial1.print("t8.bco=58417");
+    }
     Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
     Serial1.write(0xff);
     Serial1.write(0xff);

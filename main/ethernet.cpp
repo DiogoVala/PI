@@ -1,9 +1,6 @@
-
-//#include <SPI.h>
 #include <NativeEthernet.h>
 #include "ethernet.h"
 #include "ethernetAPI.h"
-//#include <aREST.h>
 
 // Enter a MAC address for your controller below.
 byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
