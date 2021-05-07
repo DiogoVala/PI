@@ -1,41 +1,70 @@
 #include "DisplayDriver.h"
 
-NexButton b0 = NexButton(1, 1, "b0");  // Button added
-NexButton b1 = NexButton(2, 8, "b1");  // Button added
-NexNumber n0 = NexNumber(2, 2, "n0"); // Text box added, so we can read it
-NexNumber n1 = NexNumber(2, 6, "n1"); // Text box added, so we can read it
-NexNumber temp = NexNumber(3, 7, "n0"); // Text box added, so we can read it
+volatile char state[][20]=
+{ "IDLE", 
+"CYCLESTART", 
+"PREHEAT", 
+"SEALING"
+};
 
-NexWaveform s0 = NexWaveform(3, 1, "s0");
-NexWaveform s1 = NexWaveform(4, 4, "s0");
-NexWaveform s2 = NexWaveform(5, 4, "s0");
+/*Home page*/
+NexPage page_home = NexPage(1, 0, "Home");  // Page added as a touch event
 
-NexPage page1 = NexPage(1, 0, "page1");  // Page added as a touch event
-NexPage page3 = NexPage(3, 0, "page3");  // Page added as a touch event
-NexPage page4 = NexPage(4, 0, "page4");  // Page added as a touch event
-NexPage page5 = NexPage(5, 0, "page5");  // Page added as a touch event
+/*Parameter page*/
+NexPage page_param = NexPage(2, 0, "Parameter");  // Page added as a touch event
+NexButton btn_validate = NexButton(2, 8, "b1");  // Button added
+NexNumber num_preheat = NexNumber(2, 2, "n0"); // Text box added, so we can read it
+NexNumber num_sealing = NexNumber(2, 6, "n1"); // Text box added, so we can read it
+/*Missing the cal. number boxes*/
+
+/*Graph1 page*/
+NexPage page_graph1 = NexPage(3, 0, "Graph1");  // Page added as a touch event
+NexWaveform graph_temp = NexWaveform(3, 1, "s0");
+
+/*Graph2 page*/
+NexPage page_graph2 = NexPage(4, 0, "Graph2");  // Page added as a touch event
+NexWaveform graph_voltage = NexWaveform(4, 4, "s0");
+
+/*Graph3 page*/
+NexPage page_graph3 = NexPage(5, 0, "Graph3");  // Page added as a touch event
+NexWaveform graph_current = NexWaveform(5, 4, "s0");
+
+/*Error page*/
 
 NexTouch *nex_listen_list[] = 
 {
-  &b0,
-  &b1,  // Button added
-  &page1,
-  &page3,
-  &page4,
-  &page5,
+  &btn_validate,  // Button added
+  &page_home,
+  &page_param,
+  &page_graph1,
+  &page_graph2,
+  &page_graph3,
   NULL  // String terminated
 };  // End of touch event list
 
 volatile uint32_t current_page = 0;
 
-void b0PushCallback(void *ptr)
+void btn_validate_PopCallback(void *ptr)
 {
-  digitalWrite(13, HIGH);  // Turn ON internal LED
-}
+  uint32_t local_preheat=0;
+  uint32_t local_sealing=0;
+  num_preheat.getValue(&local_preheat);
+  num_sealing.getValue(&local_sealing);
 
-void b0PopCallback(void *ptr)
+  temp_preheat=local_preheat;
+  temp_sealing=local_sealing;
+
+}  // End of press event
+
+void HomePushCallback(void *ptr)
 {
-  digitalWrite(13, LOW);  // Turn ON internal LED
+  current_page = 1;  // Set variable as 0 so from now on arduino knows page 0 is loaded on the display
+  Serial.println(current_page);
+}  // End of press event
+
+void ParamPushCallback(void *ptr)
+{
+  current_page = 2; 
 
   Serial1.print("n0.val=");
   Serial1.print(temp_preheat);
@@ -44,50 +73,25 @@ void b0PopCallback(void *ptr)
   Serial1.write(0xff);
 
   Serial1.print("n1.val=");
-  Serial1.print(temp_user_setpoint);
+  Serial1.print(temp_sealing);
   Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
   Serial1.write(0xff);
   Serial1.write(0xff);
-
 }
 
-void b1PushCallback(void *ptr)
-{
-  uint32_t local_preheat=0;
-  uint32_t local_sealing=0;
-  digitalWrite(13, HIGH);  // Turn ON internal LED
-  n0.getValue(&local_preheat);
-  n1.getValue(&local_sealing);
-
-  temp_preheat=local_preheat;
-  temp_user_setpoint=local_sealing;
-
-}  // End of press event
-
-void b1PopCallback(void *ptr)
-{
-  digitalWrite(13, LOW);  // Turn OFF internal LED
-}  // End of release event
-
-void page1PushCallback(void *ptr)
-{
-  current_page = 1;  // Set variable as 0 so from now on arduino knows page 0 is loaded on the display
-  Serial.println(current_page);
-}  // End of press event
-
-void page3PushCallback(void *ptr)
+void Graph1PushCallback(void *ptr)
 {
   current_page = 3;  // Set variable as 0 so from now on arduino knows page 0 is loaded on the display
   Serial.println(current_page);
 }  // End of press event
 
-void page4PushCallback(void *ptr)
+void Graph2PushCallback(void *ptr)
 {
   current_page = 4;  // Set variable as 0 so from now on arduino knows page 0 is loaded on the display
   Serial.println(current_page);
 }  // End of press event
 
-void page5PushCallback(void *ptr)
+void Graph3PushCallback(void *ptr)
 {
   current_page = 5;  // Set variable as 0 so from now on arduino knows page 0 is loaded on the display
   Serial.println(current_page);
@@ -95,20 +99,64 @@ void page5PushCallback(void *ptr)
 
 void InitDisplay() {
   // put your setup code here, to run once:
-  pinMode(13, OUTPUT);
-  pinMode(14, INPUT);
-  analogReadRes(12);
-
   Serial1.begin(115200);  // Display Baudrate
-  Serial.begin(9600); // Terminal baudrate
 
-  b0.attachPop(b0PopCallback);
-  b1.attachPush(b1PushCallback);  // Button press
-  b1.attachPop(b1PopCallback);  // Button release
-  page1.attachPush(page1PushCallback);  // Page press event
-  page3.attachPush(page3PushCallback);  // Page press event
-  page4.attachPush(page4PushCallback);  // Page press event
-  page5.attachPush(page5PushCallback);  // Page press event
+  btn_validate.attachPop(btn_validate_PopCallback);
+  page_home.attachPush(HomePushCallback);  // Page press event
+  page_param.attachPush(ParamPushCallback);  // Page press event
+  page_graph1.attachPush(Graph1PushCallback);  // Page press event
+  page_graph2.attachPush(Graph2PushCallback);  // Page press event
+  page_graph3.attachPush(Graph3PushCallback);  // Page press event
+
+  resetDisplay();
+}
+
+void updateHome(int state){
+  if(current_page==1)
+  {
+    Serial1.print("t2.txt=");  // This is sent to the nextion display to set what object name (before the dot) and what atribute (after the dot) are you going to change.
+    Serial1.print("\"");  // Since we are sending text, and not a number, we need to send double quote before and after the actual text.
+    switch(state)
+    {
+      case 3: 
+      Serial1.print("IDLE");
+      break;
+      case 4: 
+      Serial1.print("CYCLESTART");
+      break;
+      case 5: 
+      Serial1.print("PREHEATING");
+      break;
+      case 6: 
+      Serial1.print("SEALING");
+      break;
+      default:
+      Serial1.print("IDLE");
+      break;
+    } 
+    Serial1.print("\"");  // Since we are sending text, and not a number, we need to send double quote before and after the actual text.
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+
+    Serial1.print("n0.val=");
+    Serial1.print(temp_measured);
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+
+    Serial1.print("n1.val=");
+    Serial1.print(temp_preheat);
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+
+    Serial1.print("n2.val=");
+    Serial1.print(temp_sealing);
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+  }
 }
 
 void updateGraphs(){
@@ -119,7 +167,7 @@ void updateGraphs(){
   }
   if(current_page==3)
   {
-    s0.addValue(0,local_temp*160/300);
+    graph_temp.addValue(0,local_temp*160/300);
     Serial1.print("n0.val=");
     Serial1.print(local_temp);
     Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
@@ -128,12 +176,38 @@ void updateGraphs(){
   }
   else if(current_page==4)
   {
-    s1.addValue(0,(int)(voltage_rms*160/6788));
+    graph_voltage.addValue(0,(int)(voltage_rms*160/6788));
   }
   else if(current_page==5)
   {
-    s2.addValue(0,(int)(current_rms*160/5600));
+    graph_current.addValue(0,(int)(current_rms*160/5600));
   }
+}
+
+void errorPage()
+{
+  Serial1.print("page ");
+  Serial1.print("Error");
+  Serial1.write(0xff);
+  Serial1.write(0xff);
+  Serial1.write(0xff);
+
+  Serial1.print("t1.txt=");  // This is sent to the nextion display to set what object name (before the dot) and what atribute (after the dot) are you going to change.
+  Serial1.print("\"");  // Since we are sending text, and not a number, we need to send double quote before and after the actual text.
+  Serial1.print("MAX TEMP EXCEEDED");  // This is the text you want to send to that object and atribute mentioned before.
+  Serial1.print("\"");  // Since we are sending text, and not a number, we need to send double quote before and after the actual text.
+  Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+  Serial1.write(0xff);
+  Serial1.write(0xff);
+}
+
+void resetDisplay()
+{
+  Serial1.print("page ");
+  Serial1.print("Start");
+  Serial1.write(0xff);
+  Serial1.write(0xff);
+  Serial1.write(0xff);
 }
 
 void eventCheck() {

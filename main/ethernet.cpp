@@ -19,7 +19,7 @@ aREST rest = aREST();
 
 // Custom functions accessible by the API
 void set_temp_seal(String setpoint) {
-  temp_user_setpoint = setpoint.toInt();
+  temp_sealing = setpoint.toInt();
 }
 
 void set_temp_preheat(String preheat) {
