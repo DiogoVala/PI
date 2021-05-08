@@ -1,5 +1,6 @@
 #include "DisplayDriver.h"
-#include "config.h"
+
+#define DISPLAY_BAUDRATE 115200
 
 volatile char state[][20]=
 { "IDLE", 
@@ -120,19 +121,19 @@ void updateHome(int state, int input_start,int input_preheat, int input_sealing)
     switch(state)
     {
       case 3: 
-      Serial1.print("IDLE");
+      Serial1.print("Inativo");
       break;
       case 4: 
-      Serial1.print("CYCLESTART");
+      Serial1.print("Pronto");
       break;
       case 5: 
-      Serial1.print("PREHEATING");
+      Serial1.print("Pré-aquec.");
       break;
       case 6: 
-      Serial1.print("SEALING");
+      Serial1.print("Selagem");
       break;
       default:
-      Serial1.print("IDLE");
+      Serial1.print("Inativo");
       break;
     } 
     Serial1.print("\"");  // Since we are sending text, and not a number, we need to send double quote before and after the actual text.
@@ -191,14 +192,14 @@ void updateHome(int state, int input_start,int input_preheat, int input_sealing)
 }
 
 void updateGraphs(){
-  uint16_t local_temp=temp_measured;
+  uint32_t local_temp=temp_measured;
   if(local_temp>300)
   {
     local_temp=300;
   }
   if(current_page==3)
   {
-    graph_temp.addValue(0,local_temp*160/300);
+    graph_temp.addValue(0,(int)local_temp*160/320);
     Serial1.print("n0.val=");
     Serial1.print(local_temp);
     Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
@@ -207,11 +208,21 @@ void updateGraphs(){
   }
   else if(current_page==4)
   {
-    graph_voltage.addValue(0,(int)(voltage_rms*160/6788));
+    graph_voltage.addValue(0,(int)(voltage_rms*160/5000));
+    Serial1.print("n0.val=");
+    Serial1.print((int)(voltage_rms/100));
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
   }
   else if(current_page==5)
   {
-    graph_current.addValue(0,(int)(current_rms*160/5600));
+    graph_current.addValue(0,(int)(current_rms*160/5000));
+    Serial1.print("n0.val=");
+    Serial1.print((int)(current_rms/100));
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
   }
 }
 

@@ -1,8 +1,6 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define DEBUGGING 1
-
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
 #define ANALOGpin_current 15
@@ -40,7 +38,7 @@
 /*Sensors*/
 #define CURRENT_K 29464 /* Conditioning circuit - Current to voltage conversion constant ( 29.464 * 1000 )*/
 #define VOLTAGE_K 4114 /* Conditioning circuit - resistor divider constant  ( 41.14 * 100 ) */
-#define TEMP_COEF 0.001F /* Example of temperature coefficient */
+#define TEMP_COEF 0.003F /* Example of temperature coefficient */
 #define R_ZERO 1.5F /* Resistance of heatband at reference temperature */
 #define T_ZERO 20 /* Reference temperature */
 

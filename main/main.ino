@@ -5,6 +5,8 @@
    Overview: Termorregulador Digital
 */
 /*TO DO
+    -Device driver - Ethernet
+    -Device driver - Display
     -Debouncer está com busy waiting
     -Como fazer seleção entre potenciómetro, display e ethernet
     -Error handling
@@ -13,7 +15,7 @@
 
 /*
  * Tested and working:
- *  - PWM working at 2000Hz. Controller saturates because there's no feedback.
+ *  - PWM working at 32226. Controller saturates because there's no feedback.
  *  - Polling working and states change accordingly.
  *  - Temperature calculation working
  *  - State machine working with external signals
@@ -24,7 +26,68 @@
 #include "error_codes.h"
 #include "ethernet.h"
 #include "DisplayDriver.h"
-#include "config.h"
+
+#define DEBUGGING 1
+
+/**** Analog Pins ****/
+#define ANALOGpin_pot 14
+#define ANALOGpin_current 15
+#define ANALOGpin_voltage 16
+
+/**** Digital Pins ****/
+/*PLC Signals*/
+#define IOpin_enable 2
+#define IOpin_start 3
+#define IOpin_preheat 4
+#define IOpin_sealing 5
+#define IOpin_reset 6
+#define IOpin_alarm 7
+/*Control signals*/
+#define CTRLpin_PWM 8
+#define CTRLpin_OnOff 9
+#define CTRLpin_zerocross 10
+
+/*General defs*/
+#define LOW 0
+#define HIGH 1
+
+/*Uart*/
+#define UART_BAUDRATE 9600
+
+/*ADC*/
+#define ADC_RESOLUTION 12
+
+/*PWM*/
+#define PWM_FREQUENCY 2000
+#define PWM_RESOLUTION 12 
+#define MAX_DUTY_CYCLE 4095 // Change according to PWM_RESOLUTION
+#define MIN_DUTY_CYCLE 0
+
+/*Sensors*/
+#define CURRENT_K 29464 /* Conditioning circuit - Current to voltage conversion constant ( 29.464 * 1000 )*/
+#define VOLTAGE_K 4114 /* Conditioning circuit - resistor divider constant  ( 41.14 * 100 ) */
+#define TEMP_COEF 0.00393F /* Example of temperature coefficient */
+#define R_ZERO 0.8F /* Resistance of heatband at reference temperature */
+#define T_ZERO 20 /* Reference temperature */
+
+/*Control*/
+#define MAX_TEMP 300
+#define PID_KP 1
+#define PID_KI 1
+#define PID_KD 1
+#define INTEGRAL_CLAMP 1000
+
+/*Periods ( in microseconds) */
+#define PERIOD_MAIN 100
+#define PERIOD_230V 20000
+/* !!!These must be 2^n multiple of PERIOD_MAIN!!!*/
+#define PERIOD_POLLING 100
+#define PERIOD_SAMPLING 100
+#define PERIOD_DEBOUNCE 1600
+#define PERIOD_PRINT 100
+#define PERIOD_CONTROL 1600
+#define PERIOD_SM_EXECUTE 200
+#define PERIOD_DISPLAY 1000
 
 /* Constants used for counting in timer ISR*/
 /* Example (PERIOD_DEBOUNCE):
@@ -44,15 +107,15 @@ static const uint32_t COUNT_CONTROL = (PERIOD_CONTROL /PERIOD_MAIN)-1;
 static const uint32_t COUNT_EXECUTE = (PERIOD_SM_EXECUTE /PERIOD_MAIN)-1;
 
 /* Sampling */
-static volatile uint8_t sample_count = 0; /* Number of samples taken each 230VAC period*/
+static volatile uint8_t sample_count = 0;
 static volatile int64_t sum_current = 0; /* Storage of current samples*/
 static volatile int64_t sum_voltage = 0; /* Storage of voltage samples*/
 
 /*Controlo*/
-static volatile uint32_t temp_setpoint = 0; /* Internal setpoint to be applied to control routine*/
-volatile uint32_t temp_sealing = 0; /* Sealing temperature, defined by user*/
-volatile uint32_t temp_preheat = 0; /* Preheat temperature, defined by user*/
-volatile uint32_t temp_measured = 0; /* Calculated value from RMS voltage and current*/
+static volatile uint32_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint to be applied to control routine*/
+volatile uint32_t temp_sealing = 0; /* 0 to ~400º - setpoint to be defined by user*/
+volatile uint32_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
+volatile uint32_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
 volatile float current_rms = 0;
 volatile float voltage_rms = 0;
 
@@ -80,7 +143,6 @@ static sm_t sub_machine;
 static void _timer_ISR() {
   static uint32_t count_main=0;
   count_main++;
-  count_display++;
 
   /*Increment counts at 1/(2^n) times the main frequency*/
   if(!(count_main&COUNT_POLLING))
@@ -100,7 +162,8 @@ static void _timer_ISR() {
 
   if(!(count_main&COUNT_EXECUTE))
     count_execute_sm++;
-    
+
+  count_display++;
 }
 
 static void sm_execute_main(sm_t *psm) {
@@ -142,6 +205,7 @@ static void sm_execute_main(sm_t *psm) {
     /*************** ON ***************/
     case st_ON:
     /*State Actions*/
+    flag_sampling=true;
 
     /*Transitions*/
     if (psm->last_event == ev_ENABLE_LOW)
@@ -195,6 +259,7 @@ static void sm_execute_main(sm_t *psm) {
 }
 
 static void sm_execute_sub(sm_t *psm){
+
 #if DEBUGGING
   Serial.print("\rSubstate: ");
   printState(psm);
@@ -206,7 +271,6 @@ static void sm_execute_sub(sm_t *psm){
     /*State Actions*/
     digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, LOW);
-    flag_sampling=true;
     flag_control=false;
 
     /*Transitions*/
@@ -221,7 +285,6 @@ static void sm_execute_sub(sm_t *psm){
     /*State Actions*/
     digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, LOW);
-    flag_sampling=true;
     flag_control=false;
 
     /*Transitions*/
@@ -244,11 +307,9 @@ static void sm_execute_sub(sm_t *psm){
     /*State Actions*/
     digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, HIGH);
-    flag_sampling=true;
     flag_control=true;
 
     temp_setpoint=temp_preheat;
-    analogWrite(CTRLpin_PWM, MAX_DUTY_CYCLE*0.5);
 
     /*Transitions*/
     if (psm->last_event == ev_PREHEAT_LOW)
@@ -266,11 +327,10 @@ static void sm_execute_sub(sm_t *psm){
     /*State Actions*/
     digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, HIGH);
-    flag_sampling=true;
     flag_control=true;
 
     temp_setpoint=temp_sealing;
-    analogWrite(CTRLpin_PWM, MAX_DUTY_CYCLE);
+
     /*Transitions*/
     if (psm->last_event == ev_SEALING_LOW)
     {
@@ -295,12 +355,12 @@ static void _calcTemp_ISR() {
  
   /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
   temp_measured = (resistance_rms*T_slope-T_b);
-  //Serial.println(temp_measured);
+
   if(temp_measured>MAX_TEMP)
   {
-    //errorHandler(MAX_TEMP_EXCEEDED);
+    errorHandler(MAX_TEMP_EXCEEDED);
   }
-  
+
   sample_count = 0;
   sum_voltage = 0;
   sum_current = 0;
@@ -334,7 +394,7 @@ static void controlTemp(uint16_t setpoint) {
   }
 
   duty_cycle = new_duty_cycle;
-  //analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
+  analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
 }
 
 static int32_t sampleCurrent() {
@@ -378,6 +438,9 @@ static void printState(sm_t *psm) {
     break;
     case st_PREHEATING:
     Serial.println("PREHEATING");
+    break;
+    case st_RAISETEMP:
+    Serial.println("RAISETEMP");
     break;
     case st_SEAL:
     Serial.println("SEAL");
@@ -424,7 +487,8 @@ void setup() {
   pinMode(IOpin_alarm, OUTPUT);
   pinMode(CTRLpin_PWM, OUTPUT);
   pinMode(CTRLpin_OnOff, OUTPUT);
-  
+  pinMode(CTRLpin_zerocross, INPUT);
+
   /*Initialize digital outputs*/
   digitalWrite(IOpin_alarm, LOW);
   digitalWrite(CTRLpin_PWM, LOW);
@@ -436,7 +500,7 @@ void setup() {
   analogWrite(CTRLpin_PWM, LOW); /* Power controller control signal*/
 
   /*Initialize ethernet module and API*/
-  //InitEthernet();
+ //InitEthernet();
   InitDisplay();
 
   /*Start Timer ISR*/
@@ -567,9 +631,9 @@ void loop() {
   }
   else if (count_control >= PERIOD_MAIN && flag_control == false)
   {
-    analogWrite(CTRLpin_PWM, MIN_DUTY_CYCLE); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
+    analogWrite(CTRLpin_PWM, MAX_DUTY_CYCLE/2); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
   }
-
+  
   if(count_display >= PERIOD_DISPLAY)
   {
     updateHome(sub_machine.current_state, start_state, preheat_state, sealing_state);
@@ -577,8 +641,6 @@ void loop() {
     count_display = 0;
   }
 
-
-#if DEBUGGING
   /* Keyboard Simulation to test state machine*/
   uint8_t incomingByte = 0;
   if (Serial.available() > 0) {
@@ -613,5 +675,4 @@ void loop() {
       break;
     }
   }
-#endif
 }

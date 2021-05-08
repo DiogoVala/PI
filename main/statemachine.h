@@ -19,6 +19,7 @@ typedef enum {
   st_IDLE,
   st_CYCLESTART,
   st_PREHEATING,
+  st_RAISETEMP,
   st_SEAL
 } sm_state_t;
 
