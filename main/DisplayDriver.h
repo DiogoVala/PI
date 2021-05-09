@@ -4,6 +4,7 @@
 
 #include <Nextion.h> 
 
+extern volatile uint16_t network_port;
 extern volatile uint32_t temp_sealing;
 extern volatile uint32_t temp_preheat;
 extern volatile uint32_t temp_measured;

@@ -27,7 +27,7 @@
 #include "ethernet.h"
 #include "DisplayDriver.h"
 
-#define DEBUGGING 1
+#define DEBUGGING 0
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
@@ -215,6 +215,7 @@ static void sm_execute_main(sm_t *psm) {
     }
     if (psm->last_event == ev_RESET)
     {
+      resetDisplay();
       sm_init(&sub_machine, st_IDLE);
       psm->last_event = ev_NULL;
     }
@@ -439,9 +440,6 @@ static void printState(sm_t *psm) {
     case st_PREHEATING:
     Serial.println("PREHEATING");
     break;
-    case st_RAISETEMP:
-    Serial.println("RAISETEMP");
-    break;
     case st_SEAL:
     Serial.println("SEAL");
     break;
@@ -515,7 +513,7 @@ void setup() {
 }
 
 void loop() {
-  //ListenClient();
+  ListenClient();
   eventCheck();
   
   /*Old states of input signals for polling*/

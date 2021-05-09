@@ -1,13 +1,11 @@
 #include "DisplayDriver.h"
+#include <string.h>
+#include "ethernet.h"
+#include "statemachine.h"
 
 #define DISPLAY_BAUDRATE 115200
 
-volatile char state[][20]=
-{ "IDLE", 
-"CYCLESTART", 
-"PREHEAT", 
-"SEALING"
-};
+char buffer[100] = {0};
 
 /*Home page*/
 NexPage page_home = NexPage(1, 0, "Home");  // Page added as a touch event
@@ -31,20 +29,86 @@ NexWaveform graph_voltage = NexWaveform(4, 4, "s0");
 NexPage page_graph3 = NexPage(5, 0, "Graph3");  // Page added as a touch event
 NexWaveform graph_current = NexWaveform(5, 4, "s0");
 
+/*Info page*/
+NexPage page_info = NexPage(6, 0, "Info");  // Page added as a touch event
+
+/*Help page*/
+NexPage page_help = NexPage(7, 0, "Help");  // Page added as a touch event
+
 /*Error page*/
+NexPage page_error = NexPage(8, 0, "Error");  // Page added as a touch event
+
+/*Network page*/
+NexPage page_network = NexPage(9, 0, "Network");  // Page added as a touch event
+NexButton btn_netonoff = NexButton(9, 3, "onoff");  // Button added
+NexButton btn_return = NexButton(9, 1, "b2");  // Button added
+NexNumber num_port = NexNumber(9, 7, "n0"); // Text box added, so we can read it
 
 NexTouch *nex_listen_list[] = 
 {
   &btn_validate,  // Button added
+  &btn_netonoff,
+  &btn_return,
   &page_home,
   &page_param,
   &page_graph1,
   &page_graph2,
   &page_graph3,
+  &page_info,
+  &page_help,
+  &page_error,
+  &page_network,
   NULL  // String terminated
 };  // End of touch event list
 
 volatile uint32_t current_page = 0;
+volatile uint8_t network_state = 0;
+volatile uint8_t allow_return = 1;
+
+void updateNetworkPage();
+
+void btn_return_PopCallback(void *ptr)
+{
+  if(allow_return == 1){
+    Serial1.print("page Home");
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+  }
+}
+
+void btn_netonoff_PopCallback(void *ptr)
+{
+
+  uint32_t local_port=0;
+
+  if(network_state == 0)
+  { 
+    allow_return = 0;
+
+    num_port.getValue(&local_port);
+    network_port=local_port;
+    Serial.println(network_port);
+    Serial1.print("t3.txt=\"A conectar ...\"");
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+
+    InitEthernet();
+
+    network_state = 1;
+    allow_return = 1;
+    updateNetworkPage();
+  }
+  else
+  {
+    stopEthernet();
+    network_state = 0;
+    updateNetworkPage();
+
+  }
+
+}  // End of press event
 
 void btn_validate_PopCallback(void *ptr)
 {
@@ -99,17 +163,104 @@ void Graph3PushCallback(void *ptr)
   Serial.println(current_page);
 }  // End of press event
 
+void InfoPushCallback(void *ptr)
+{
+  current_page = 6;
+  Serial.println(current_page);
+}
+
+void HelpPushCallback(void *ptr)
+{
+  current_page = 7;
+  Serial.println(current_page);
+}
+
+void ErrorPushCallback(void *ptr)
+{
+  current_page = 8;
+  Serial.println(current_page);
+}
+
+void NetworkPushCallback(void *ptr)
+{
+  current_page = 9;
+  Serial.println(current_page);
+  updateNetworkPage();
+}
+
+
+void updateNetworkPage() {
+  Serial1.print("n0.val=");
+  Serial1.print(network_port);
+  Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+  Serial1.write(0xff);
+  Serial1.write(0xff);
+
+  if(network_state==0){
+    btn_netonoff.setText("Ligar");
+
+    Serial1.print("t3.txt=");
+    Serial1.print("\"");
+    Serial1.print("Offline");
+    Serial1.print("\"");
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff); 
+
+    Serial1.print("t4.txt=");
+    Serial1.print("\"");
+    Serial1.print("0.0.0.0");
+    Serial1.print("\"");
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+  }
+  else
+  {
+    Serial1.print("t3.txt=");
+    Serial1.print("\"");
+    if(linkStatus()==0){ 
+      Serial1.print("Online"); 
+      Serial1.print("\"");
+      Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+      Serial1.write(0xff);
+      Serial1.write(0xff);
+      btn_netonoff.setText("Desligar");
+    }
+    else{
+      Serial1.print("Offline");
+      Serial1.print("\"");
+      Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+      Serial1.write(0xff);
+      Serial1.write(0xff); 
+    }
+
+    Serial1.print("t4.txt=");
+    Serial1.print("\"");
+    getIP();
+    Serial1.print("\"");
+    Serial1.write(0xff);  // We always have to send this three lines after each command sent to the nextion display.
+    Serial1.write(0xff);
+    Serial1.write(0xff);
+  }
+}
+
 void InitDisplay() {
   // put your setup code here, to run once:
   Serial1.begin(DISPLAY_BAUDRATE);  // Display Baudrate
 
   btn_validate.attachPop(btn_validate_PopCallback);
+  btn_netonoff.attachPop(btn_netonoff_PopCallback);
+  btn_return.attachPop(btn_return_PopCallback);
   page_home.attachPush(HomePushCallback);  // Page press event
   page_param.attachPush(ParamPushCallback);  // Page press event
   page_graph1.attachPush(Graph1PushCallback);  // Page press event
   page_graph2.attachPush(Graph2PushCallback);  // Page press event
   page_graph3.attachPush(Graph3PushCallback);  // Page press event
-
+  page_info.attachPush(InfoPushCallback);
+  page_help.attachPush(HelpPushCallback);
+  page_error.attachPush(ErrorPushCallback);
+  page_network.attachPush(NetworkPushCallback);
   resetDisplay();
 }
 
@@ -120,16 +271,16 @@ void updateHome(int state, int input_start,int input_preheat, int input_sealing)
     Serial1.print("\"");  // Since we are sending text, and not a number, we need to send double quote before and after the actual text.
     switch(state)
     {
-      case 3: 
+      case st_IDLE: 
       Serial1.print("Inativo");
       break;
-      case 4: 
+      case st_CYCLESTART: 
       Serial1.print("Pronto");
       break;
-      case 5: 
+      case st_PREHEATING: 
       Serial1.print("Pré-aquec.");
       break;
-      case 6: 
+      case st_SEAL: 
       Serial1.print("Selagem");
       break;
       default:
@@ -197,6 +348,8 @@ void updateGraphs(){
   {
     local_temp=300;
   }
+
+
   if(current_page==3)
   {
     graph_temp.addValue(0,(int)local_temp*160/320);
@@ -245,11 +398,14 @@ void errorPage()
 
 void resetDisplay()
 {
-  Serial1.print("page ");
-  Serial1.print("Start");
+  Serial1.print("rest");
   Serial1.write(0xff);
   Serial1.write(0xff);
   Serial1.write(0xff);
+
+  stopEthernet();
+  network_state = 0;
+  allow_return = 1;
 }
 
 void eventCheck() {

@@ -2,6 +2,11 @@
 #include "ethernet.h"
 #include "ethernetAPI.h"
 
+#define ETHERNET_ONLINE 0
+#define ETHERNET_OFFLINE -1
+
+volatile uint16_t network_port=80;
+
 // Enter a MAC address for your controller below.
 byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
 
@@ -9,7 +14,7 @@ byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
 IPAddress ip(192,168,2,2);
 
 // Ethernet server
-EthernetServer server(80);
+EthernetServer server(0);
 
 // Create aREST instance
 aREST rest = aREST();
@@ -35,8 +40,10 @@ float read_current(){
   return current_rms;
 }
 
-void InitEthernet(void)
+void InitEthernet()
 {
+  server = EthernetServer(network_port);
+
   // Function to be exposed
   rest.function("set_seal",set_temp_seal);
   rest.function("set_preheat",set_temp_preheat);
@@ -55,13 +62,27 @@ void InitEthernet(void)
   }
 
   server.begin();
-  //Serial.print("server is at ");
-  //Serial.println(Ethernet.localIP());
+
+}
+
+int8_t linkStatus(){
+  if(Ethernet.linkStatus() == LinkON){
+    return ETHERNET_ONLINE;
+  }
+  else {
+    return ETHERNET_OFFLINE;
+  }
+}
+
+const char* getIP(){
+  Serial1.print(Ethernet.localIP());
+}
+
+void stopEthernet(){
+  server = EthernetServer(0);
 }
 
 void ListenClient(){
-  // listen for incoming clients
   EthernetClient client = server.available();
   rest.handle(client);
-  //Serial.println("\rclient\n");
 }

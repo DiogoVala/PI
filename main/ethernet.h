@@ -9,6 +9,12 @@ extern volatile float voltage_rms;
 
 void InitEthernet(void);
 
+int8_t linkStatus();
+
+const char* getIP();
+
+void stopEthernet();
+
 void ListenClient();
 
 #endif
