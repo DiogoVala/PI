@@ -35,7 +35,7 @@
 
 /*Sensors*/
 #define CURRENT_K 29464 /* Conditioning circuit - Current to voltage conversion constant ( 29.464 * 1000 )*/
-#define VOLTAGE_K 4114 /* Conditioning circuit - resistor divider constant  ( 41.14 * 100 ) */
+#define VOLTAGE_K 4861 /* Conditioning circuit - resistor divider constant  ( 41.14 * 100 ) */
 #define TEMP_COEF 0.001F /* Example of temperature coefficient */
 #define R_ZERO 1.01F /* Resistance of heatband at reference temperature */
 #define T_ZERO 20 /* Reference temperature */
@@ -46,10 +46,10 @@
 #define MAX_SEALING 300
 #define MAX_VOLTAGE 50
 #define MAX_CURRENT 40
-#define PID_KP 1
-#define PID_KI 1
-#define PID_KD 1
-#define INTEGRAL_CLAMP 1000
+#define PID_KP 10
+#define PID_KI 5
+#define PID_KD 10
+#define INTEGRAL_CLAMP 20
 
 /*Main timekeeping period*/
 #define PERIOD_MAIN 100
@@ -57,7 +57,7 @@
 /*Periods ( in microseconds) */
 #define PERIOD_230V 20000
 #define PERIOD_POLLING 100
-#define PERIOD_SAMPLING 1000
-#define PERIOD_CONTROL 1000
+#define PERIOD_SAMPLING 2000
+#define PERIOD_CONTROL 20000
 #define PERIOD_SM_EXECUTE 1000
 #define PERIOD_DISPLAY 100000

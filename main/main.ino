@@ -44,11 +44,12 @@ static volatile int64_t sum_voltage = 0; /* Storage of voltage samples*/
 
 /*Controlo*/
 static volatile uint32_t temp_setpoint = 0; /* 0 to ~400º - internal setpoint to be applied to control routine*/
-volatile uint32_t temp_sealing = 0; /* 0 to ~400º - setpoint to be defined by user*/
-volatile uint32_t temp_preheat = 0; /* 0 to ~400º - Value defined by user*/
+volatile uint32_t temp_sealing = 100; /* 0 to ~400º - setpoint to be defined by user*/
+volatile uint32_t temp_preheat = 100; /* 0 to ~400º - Value defined by user*/
 volatile uint32_t temp_measured = 0; /* 0 to ~400º - Calculated value from resitance*/
 volatile float current_rms = 0;
 volatile float voltage_rms = 0;
+volatile int16_t duty_cycle = 1000; /* 0 to 4095 - PWM duty cycle for the control signal*/
 
 /*Timers*/
 IntervalTimer Timer_Main; /* Interrupt timer*/
@@ -127,6 +128,7 @@ static void sm_execute_main(sm_t *psm) {
     if (psm->last_event == ev_RESET)
     {
       resetDisplay();
+      duty_cycle=0;
       sm_init(&sub_machine, st_IDLE);
       psm->last_event = ev_NULL;
     }
@@ -166,7 +168,7 @@ static void sm_execute_main(sm_t *psm) {
 
 static void sm_execute_sub(sm_t *psm){
 
-#if DEBUGGING
+#if DEBBUGGING
   Serial.print("\rSubstate: ");
   printState(psm);
 #endif
@@ -216,7 +218,7 @@ static void sm_execute_sub(sm_t *psm){
     flag_control=true;
 
     temp_setpoint=temp_preheat;
-
+    
     /*Transitions*/
     if (psm->last_event == ev_PREHEAT_LOW)
     {
@@ -260,25 +262,44 @@ static void _calcTemp_ISR() {
   {
     errorHandler(ERROR_MAX_VOLTAGE_EXCEEDED);
   }
-  else if(voltage_rms/100<5)
-  {
-    voltage_rms=1;
-  }
-
+  
   current_rms = sqrt(sum_current / sample_count);
   if(current_rms/100>MAX_CURRENT)
   {
     errorHandler(ERROR_MAX_CURRENT_EXCEEDED);
   }
-  else if(current_rms/100<5)
+
+  if(current_rms<100 && voltage_rms<250)
   {
+    voltage_rms=1.01;
     current_rms=1;
   }
 
   resistance_rms = voltage_rms / current_rms;
+/*
+  static uint32_t tmp_v=0;
+  static uint32_t tmp_i=0;
+  if(voltage_rms>tmp_v)
+    tmp_v=voltage_rms;
+  if(current_rms>tmp_i)
+    tmp_i=current_rms;
 
-  /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
+  Serial.print("\r\nTensao: ");
+  Serial.println(tmp_v);
+  Serial.print("\r\nCorrente: ");
+  Serial.println(tmp_i);
+  Serial.print("\r\nResistencia: ");
+  Serial.println(resistance_rms);
+*/
+
+  //Serial.println(resistance_rms);  
+
+  //temp_measured = (resistance_rms - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);
+  //temp_measured = (((resistance_rms/R_ZERO)-1)/TEMP_COEF)+T_ZERO;
   temp_measured = (resistance_rms*T_slope-T_b);
+  //Serial.println(temp_measured);
+  if(temp_measured>350)
+    temp_measured=350;
 
   if(temp_measured>MAX_TEMPERATURE)
   {
@@ -292,30 +313,22 @@ static void _calcTemp_ISR() {
 
 static void controlTemp(uint16_t setpoint) {
 
-  static uint16_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
+  static int16_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
   static int32_t integral = 0; /* Integral component of PID*/
   static int32_t derivative = 0; /* Derivative component of PID*/
-  static uint16_t duty_cycle = 0; /* 0 to 4095 - PWM duty cycle for the control signal*/
-
-  uint16_t new_duty_cycle = duty_cycle;
-  int16_t temp_error = temp_measured - setpoint;
+  
+  int16_t new_duty_cycle = duty_cycle;
+  int16_t temp_error = setpoint - temp_measured;
 
   /*Controlo*/
 
-  derivative=(temp_error-temp_error_old);
+  derivative=(temp_error_old-temp_error)/2;
 
   integral += temp_error;
   if (integral > INTEGRAL_CLAMP) integral = INTEGRAL_CLAMP;
   if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP;
 
-  Serial.print("Derivative: ");
-  Serial.println(derivative);
-  Serial.print("Integral: ");
-  Serial.println(integral);
-  Serial.print("Proportional: ");
-  Serial.println(temp_error);
-
-  new_duty_cycle += ((PID_KP * temp_error) + (PID_KI * integral) + (PID_KD * derivative));
+  new_duty_cycle += ((temp_error/PID_KP) + (integral/PID_KI) + (derivative/PID_KD));
 
   if (new_duty_cycle > MAX_DUTY_CYCLE) {
     new_duty_cycle = MAX_DUTY_CYCLE;
@@ -323,6 +336,21 @@ static void controlTemp(uint16_t setpoint) {
   else if (new_duty_cycle < MIN_DUTY_CYCLE) {
     new_duty_cycle = MIN_DUTY_CYCLE;
   }
+
+  Serial.print("Derivative: ");
+  Serial.println(derivative/PID_KD);
+  Serial.print("Integral: ");
+  Serial.println(integral/PID_KI);
+  Serial.print("Proportional: ");
+  Serial.println(temp_error/PID_KP);
+  Serial.print("DC: ");
+  Serial.println(new_duty_cycle);
+  Serial.print("Temp: ");
+  Serial.println(temp_measured);
+  Serial.print("Voltage: ");
+  Serial.println(voltage_rms);
+  Serial.print("Current: ");
+  Serial.println(current_rms);
 
   duty_cycle = new_duty_cycle;
   analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
@@ -342,7 +370,7 @@ static int32_t sampleVoltage() {
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_voltage);
   sample = (sample * 330000)>>ADC_RESOLUTION; /* [0 , 330000] V */
-  sample = sample - 165000; /* [-165000 , 165000] V */
+  sample = (sample - 165000); /* [-165000 , 165000] V */
   sample = sample * VOLTAGE_K / 100000; /* [-165000 , 165000] V  * 4114 / 100000 = [-6788 , 6788] V*100 */
   return sample;
 }
@@ -543,13 +571,28 @@ void loop() {
       temp_sealing=(analogRead(ANALOGpin_pot)*MAX_TEMPERATURE)>>ADC_RESOLUTION ; /* Read pot value*/
     }
     /*Serial.println(temp_sealing);*/
+
+    static int32_t tmp_v=0;
+    static int32_t tmp_i=0;
+
     int32_t sample;
     sample=sampleCurrent();
     sum_current += sample*sample;
-
+/*
+    if(sample>tmp_i)
+     tmp_i=sample;
+    */
     sample=sampleVoltage();
     sum_voltage += sample*sample;
+/*
+    if(sample>tmp_v)
+      tmp_v=sample;
 
+    Serial.print("\r\nAmostra V: ");
+    Serial.println(tmp_v);
+    Serial.print("\r\nAmostra I: ");
+    Serial.println(tmp_i);
+*/
     sample_count++;
 
     count_sampling = 0;
@@ -563,7 +606,7 @@ void loop() {
   }
   else if (count_control >= COUNT_CONTROL && flag_control == false)
   {
-    analogWrite(CTRLpin_PWM, MAX_DUTY_CYCLE/2); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
+    analogWrite(CTRLpin_PWM, MIN_DUTY_CYCLE); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
   }
   
   /*Display*/

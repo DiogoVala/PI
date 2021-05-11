@@ -338,12 +338,12 @@ void errorPage(int8_t error_code)
 
 void resetDisplay()
 {
-  current_page=pg_START;
-  Serial1.print("rest"); //Reset display
-  terminateMessage();
+  //current_page=pg_START;
+  //Serial1.print("rest"); //Reset display
+  //terminateMessage();
 
-  stopEthernet();
-  network_state = 0;
+  //stopEthernet();
+  //network_state = 0;
 }
 
 void eventCheck() {
