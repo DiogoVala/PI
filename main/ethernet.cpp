@@ -1,4 +1,5 @@
 #include <NativeEthernet.h>
+#include "config.h"
 #include "ethernet.h"
 #include "ethernetAPI.h"
 
@@ -21,11 +22,35 @@ aREST rest = aREST();
 
 // Custom functions accessible by the API
 void set_temp_seal(String setpoint) {
-  temp_sealing = setpoint.toInt();
+  uint32_t local_sealing = setpoint.toInt();
+  if(local_sealing<0)
+  {
+    temp_sealing = 0;
+  }
+  else if(local_sealing>MAX_SEALING)
+  {
+    temp_sealing = MAX_SEALING;
+  }
+  else
+  {
+    temp_sealing=local_sealing;
+  }
 }
 
 void set_temp_preheat(String preheat) {
-  temp_preheat = preheat.toInt();
+  uint32_t local_preheat = preheat.toInt();
+  if(local_preheat<0)
+  {
+    temp_preheat = 0;
+  }
+  else if(local_preheat>MAX_PREHEAT)
+  {
+    temp_preheat = MAX_PREHEAT;
+  }
+  else
+  {
+    temp_preheat=local_preheat;
+  }
 }
 
 int read_temp(){

@@ -15,7 +15,7 @@
 
 /*
  * Tested and working:
- *  - PWM working at 32226. Controller saturates because there's no feedback.
+ *  - PWM working at 2000. Controller saturates because there's no feedback.
  *  - Polling working and states change accordingly.
  *  - Temperature calculation working
  *  - State machine working with external signals
@@ -23,88 +23,19 @@
 
 
 #include "statemachine.h"
-#include "error_codes.h"
 #include "ethernet.h"
 #include "DisplayDriver.h"
+#include "error_handler.h"
+#include "config.h"
 
 #define DEBUGGING 0
+#define ERRORCHECKING 0
 
-/**** Analog Pins ****/
-#define ANALOGpin_pot 14
-#define ANALOGpin_current 15
-#define ANALOGpin_voltage 16
-
-/**** Digital Pins ****/
-/*PLC Signals*/
-#define IOpin_enable 2
-#define IOpin_start 3
-#define IOpin_preheat 4
-#define IOpin_sealing 5
-#define IOpin_reset 6
-#define IOpin_alarm 7
-/*Control signals*/
-#define CTRLpin_PWM 8
-#define CTRLpin_OnOff 9
-#define CTRLpin_zerocross 10
-
-/*General defs*/
-#define LOW 0
-#define HIGH 1
-
-/*Uart*/
-#define UART_BAUDRATE 9600
-
-/*ADC*/
-#define ADC_RESOLUTION 12
-
-/*PWM*/
-#define PWM_FREQUENCY 2000
-#define PWM_RESOLUTION 12 
-#define MAX_DUTY_CYCLE 4095 // Change according to PWM_RESOLUTION
-#define MIN_DUTY_CYCLE 0
-
-/*Sensors*/
-#define CURRENT_K 29464 /* Conditioning circuit - Current to voltage conversion constant ( 29.464 * 1000 )*/
-#define VOLTAGE_K 4114 /* Conditioning circuit - resistor divider constant  ( 41.14 * 100 ) */
-#define TEMP_COEF 0.00393F /* Example of temperature coefficient */
-#define R_ZERO 0.8F /* Resistance of heatband at reference temperature */
-#define T_ZERO 20 /* Reference temperature */
-
-/*Control*/
-#define MAX_TEMP 300
-#define PID_KP 1
-#define PID_KI 1
-#define PID_KD 1
-#define INTEGRAL_CLAMP 1000
-
-/*Periods ( in microseconds) */
-#define PERIOD_MAIN 100
-#define PERIOD_230V 20000
-/* !!!These must be 2^n multiple of PERIOD_MAIN!!!*/
-#define PERIOD_POLLING 100
-#define PERIOD_SAMPLING 100
-#define PERIOD_DEBOUNCE 1600
-#define PERIOD_PRINT 100
-#define PERIOD_CONTROL 1600
-#define PERIOD_SM_EXECUTE 200
-#define PERIOD_DISPLAY 1000
-
-/* Constants used for counting in timer ISR*/
-/* Example (PERIOD_DEBOUNCE):
-
-   if(!(timer_main&0x0F))
-    timer_debounce++
-
-  Example (PERIOD_POLLING):
-
-   if(!(timer_main&0x07))
-    timer_polling++         */
-static const uint32_t COUNT_POLLING = (PERIOD_POLLING /PERIOD_MAIN)-1;
-static const uint32_t COUNT_SAMPLING = (PERIOD_SAMPLING /PERIOD_MAIN)-1;
-static const uint32_t COUNT_DEBOUNCE = (PERIOD_DEBOUNCE /PERIOD_MAIN)-1;
-static const uint32_t COUNT_PRINT = (PERIOD_PRINT /PERIOD_MAIN)-1;
-static const uint32_t COUNT_CONTROL = (PERIOD_CONTROL /PERIOD_MAIN)-1;
-static const uint32_t COUNT_EXECUTE = (PERIOD_SM_EXECUTE /PERIOD_MAIN)-1;
+static const uint32_t COUNT_POLLING = (PERIOD_POLLING / PERIOD_MAIN);
+static const uint32_t COUNT_SAMPLING = (PERIOD_SAMPLING / PERIOD_MAIN);
+static const uint32_t COUNT_CONTROL = (PERIOD_CONTROL / PERIOD_MAIN);
+static const uint32_t COUNT_EXECUTE = (PERIOD_SM_EXECUTE / PERIOD_MAIN);
+static const uint32_t COUNT_DISPLAY = (PERIOD_DISPLAY / PERIOD_MAIN);
 
 /* Sampling */
 static volatile uint8_t sample_count = 0;
@@ -124,9 +55,6 @@ IntervalTimer Timer_Main; /* Interrupt timer*/
 IntervalTimer Timer_230V;
 static volatile uint32_t count_polling = 0;
 static volatile uint32_t count_sampling = 0;
-static volatile uint32_t count_zerocross = 0;
-static volatile uint32_t count_debounce = 0; /*Note: Not used*/
-static volatile uint32_t count_print = 0;
 static volatile uint32_t count_control = 0;
 static volatile uint32_t count_execute_sm = 0;
 static volatile uint32_t count_display = 0;
@@ -135,39 +63,22 @@ static volatile uint32_t count_display = 0;
 static volatile bool flag_control = false; /* Flag to signal that the control routine can be called*/
 static volatile bool flag_sampling = false; /* Flag to signal that the sampling routine can be called*/
 static volatile bool flag_pot_read = false; /* Flag to signal that the potentiometre can be read*/
+static volatile bool flag_execute = true;
 
 /*State machines*/
 static sm_t main_machine;
 static sm_t sub_machine;
 
 static void _timer_ISR() {
-  static uint32_t count_main=0;
-  count_main++;
-
-  /*Increment counts at 1/(2^n) times the main frequency*/
-  if(!(count_main&COUNT_POLLING))
-    count_polling++;
-
-  if(!(count_main&COUNT_SAMPLING))
-    count_sampling++;
-
-  if(!(count_main&COUNT_DEBOUNCE))
-    count_debounce++;
-
-  if(!(count_main&COUNT_PRINT))
-    count_print++;
-
-  if(!(count_main&COUNT_CONTROL))
-    count_control++;
-
-  if(!(count_main&COUNT_EXECUTE))
-    count_execute_sm++;
-
+  count_polling++;
+  count_sampling++;
+  count_control++;
+  count_execute_sm++;
   count_display++;
 }
 
 static void sm_execute_main(sm_t *psm) {
-  
+
 #if DEBUGGING
   Serial.print("\r\x1b[2J"); /*Clear screen*/
   Serial.print("\rTermorregulador Digital\n");
@@ -231,9 +142,6 @@ static void sm_execute_main(sm_t *psm) {
     flag_sampling=false;
     flag_control=false;
 
-    Serial.print("\rError Code: 123\n");
-    Serial.print("\n\n");
-
     /*Transitions*/
     if (psm->last_event == ev_ENABLE_LOW)
     {
@@ -248,9 +156,6 @@ static void sm_execute_main(sm_t *psm) {
       sm_init(&sub_machine, st_IDLE);
     }
     break;
-
-    /* Note: Maybe put ALARM inside default case */
-
   }
   /*Force Alarm state */
   if(psm->last_event == ev_OK_LOW)
@@ -351,15 +256,33 @@ static void _calcTemp_ISR() {
   static const float T_b=1/TEMP_COEF-T_ZERO;
 
   voltage_rms = sqrt(sum_voltage / sample_count);
+  if(voltage_rms/100>MAX_VOLTAGE)
+  {
+    errorHandler(ERROR_MAX_VOLTAGE_EXCEEDED);
+  }
+  else if(voltage_rms/100<5)
+  {
+    voltage_rms=1;
+  }
+
   current_rms = sqrt(sum_current / sample_count);
+  if(current_rms/100>MAX_CURRENT)
+  {
+    errorHandler(ERROR_MAX_CURRENT_EXCEEDED);
+  }
+  else if(current_rms/100<5)
+  {
+    current_rms=1;
+  }
+
   resistance_rms = voltage_rms / current_rms;
- 
+
   /*temp_measured = (resistance - R_ZERO + R_ZERO * TEMP_COEF * T_ZERO) / (TEMP_COEF * R_ZERO);*/
   temp_measured = (resistance_rms*T_slope-T_b);
 
-  if(temp_measured>MAX_TEMP)
+  if(temp_measured>MAX_TEMPERATURE)
   {
-    errorHandler(MAX_TEMP_EXCEEDED);
+    errorHandler(ERROR_MAX_TEMPERATURE_EXCEEDED);
   }
 
   sample_count = 0;
@@ -384,6 +307,13 @@ static void controlTemp(uint16_t setpoint) {
   integral += temp_error;
   if (integral > INTEGRAL_CLAMP) integral = INTEGRAL_CLAMP;
   if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP;
+
+  Serial.print("Derivative: ");
+  Serial.println(derivative);
+  Serial.print("Integral: ");
+  Serial.println(integral);
+  Serial.print("Proportional: ");
+  Serial.println(temp_error);
 
   new_duty_cycle += ((PID_KP * temp_error) + (PID_KI * integral) + (PID_KD * derivative));
 
@@ -417,11 +347,6 @@ static int32_t sampleVoltage() {
   return sample;
 }
 
-static void debounce() {
-  count_debounce = 0;
-  while (count_debounce < PERIOD_DEBOUNCE); /* XXX: Must change debouncing mode */
-}
-
 /*Function not needed in final product*/
 static void printState(sm_t *psm) {
   switch (sm_get_current_state(psm)) {
@@ -450,15 +375,23 @@ static void printState(sm_t *psm) {
 }
 
 static void errorHandler(int8_t error_code){
-  switch(error_code){
-    case MAX_TEMP_EXCEEDED: 
-      errorPage();
-      sm_send_event(&main_machine, ev_OK_LOW);
-    break;
-    default:
-    Serial.print("\rError\n");
-    break;
-  }
+#if ERRORCHECKING
+  errorPage(error_code);
+  sm_send_event(&main_machine, ev_OK_LOW);
+#endif
+}
+
+void pauseSystem(){
+  flag_execute = false;
+  flag_control = false;
+  flag_sampling = false;
+  flag_pot_read = false;
+}
+
+void unpauseSystem(){
+  main_machine.current_state=st_ON;
+  sub_machine.current_state=st_IDLE;
+  flag_execute = true;
 }
 
 void setup() {
@@ -472,9 +405,9 @@ void setup() {
   Serial.println("Starting...");
   /*Analog Pins*/
   analogReadRes(ADC_RESOLUTION);
-  pinMode(ANALOGpin_pot, INPUT);
-  pinMode(ANALOGpin_current, INPUT);
-  pinMode(ANALOGpin_voltage, INPUT);
+  //pinMode(ANALOGpin_pot, INPUT);
+  //pinMode(ANALOGpin_current, INPUT);
+  //pinMode(ANALOGpin_voltage, INPUT);
 
   /*Digital Pins*/
   pinMode(IOpin_enable, INPUT);
@@ -514,7 +447,6 @@ void setup() {
 
 void loop() {
   ListenClient();
-  eventCheck();
   
   /*Old states of input signals for polling*/
   static uint8_t enable_state = LOW;
@@ -524,8 +456,10 @@ void loop() {
   static uint8_t reset_state = LOW;
 
   /* Polling*/
-  if (count_polling >= PERIOD_MAIN)
+  if (count_polling >= COUNT_POLLING)
   {
+    eventCheck(); /*Display Polling*/
+
     /* Reset pin*/
     if (digitalRead(IOpin_reset) != reset_state)
     {
@@ -594,7 +528,7 @@ void loop() {
   }
 
   /*Execute state machine*/
-  if (count_execute_sm >= PERIOD_MAIN)
+  if (count_execute_sm >= COUNT_EXECUTE && flag_execute == true)
   {
     sm_execute_main(&main_machine);
     count_execute_sm=0;
@@ -602,11 +536,11 @@ void loop() {
   }
 
   /*Sampling*/
-  if (count_sampling >= PERIOD_MAIN && flag_sampling == true)
+  if (count_sampling >= COUNT_SAMPLING && flag_sampling == true)
   {
     if(flag_pot_read == true)
     {
-      temp_sealing=(analogRead(ANALOGpin_pot)*MAX_TEMP)>>ADC_RESOLUTION ; /* Read pot value*/
+      temp_sealing=(analogRead(ANALOGpin_pot)*MAX_TEMPERATURE)>>ADC_RESOLUTION ; /* Read pot value*/
     }
     /*Serial.println(temp_sealing);*/
     int32_t sample;
@@ -622,20 +556,20 @@ void loop() {
   }
 
   /*Control*/
-  if (count_control >= PERIOD_MAIN && flag_control == true)
+  if (count_control >= COUNT_CONTROL && flag_control == true)
   {
     controlTemp(temp_setpoint);
     count_control = 0;
   }
-  else if (count_control >= PERIOD_MAIN && flag_control == false)
+  else if (count_control >= COUNT_CONTROL && flag_control == false)
   {
     analogWrite(CTRLpin_PWM, MAX_DUTY_CYCLE/2); /*XXX: Might be MAX_DUTY_CYCLE if logic is inverted*/
   }
   
-  if(count_display >= PERIOD_DISPLAY)
+  /*Display*/
+  if(count_display >= COUNT_DISPLAY)
   {
-    updateHome(sub_machine.current_state, start_state, preheat_state, sealing_state);
-    updateGraphs();
+    updateDisplay(sub_machine.current_state, start_state, preheat_state, sealing_state);
     count_display = 0;
   }
 
