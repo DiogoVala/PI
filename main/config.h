@@ -28,24 +28,12 @@
 #define ADC_RESOLUTION 12
 
 /*PWM*/
-#define PWM_FREQUENCY 2000
+#define PWM_FREQUENCY_HZ 2000 
 #define PWM_RESOLUTION 12 
-#define MAX_DUTY_CYCLE 4095 // Change according to PWM_RESOLUTION
+#define MAX_DUTY_CYCLE 4095 /* Change according to PWM_RESOLUTION*/
 #define MIN_DUTY_CYCLE 0
 
-/*Sensors*/
-#define CURRENT_K 29464 /* Conditioning circuit - Current to voltage conversion constant ( 29.464 * 1000 )*/
-#define VOLTAGE_K 4861 /* Conditioning circuit - resistor divider constant  ( 41.14 * 100 ) */
-#define TEMP_COEF 0.001F /* Example of temperature coefficient */
-#define R_ZERO 1.01F /* Resistance of heatband at reference temperature */
-#define T_ZERO 20 /* Reference temperature */
-
 /*Control*/
-#define MAX_TEMPERATURE 300
-#define MAX_PREHEAT 300
-#define MAX_SEALING 300
-#define MAX_VOLTAGE 50
-#define MAX_CURRENT 40
 #define PID_KP 10
 #define PID_KI 5
 #define PID_KD 10
@@ -57,7 +45,26 @@
 /*Periods ( in microseconds) */
 #define PERIOD_230V 20000
 #define PERIOD_POLLING 100
-#define PERIOD_SAMPLING 2000
-#define PERIOD_CONTROL 20000
+#define PERIOD_SAMPLING 1000
+#define PERIOD_CONTROL 1000
 #define PERIOD_SM_EXECUTE 1000
 #define PERIOD_DISPLAY 100000
+
+/*Sensors*/
+#define CURRENT_M 3846 /* Linearization slope */
+#define CURRENT_B 5321 /* Linearization constant */
+#define VOLTAGE_M 2209 /* Linearization slope */
+#define VOLTAGE_B 7500 /* Linearization constant */
+#define TEMP_COEF 0.001F /* Example of temperature coefficient */
+#define R_ZERO 1.01F /* Resistance of heatband at reference temperature */
+#define T_ZERO 20 /* Reference temperature */
+#define SAMPLES_PER_PERIOD 200 /*(PERIOD_SAMPLING*PERIOD_MAIN)/PERIOD_230V */ 
+
+/*Limits*/
+#define MAX_TEMPERATURE 300 /* Temperature limit before system error*/
+#define MAX_PREHEAT 300 /* Maximum preheat temperatura value*/
+#define MAX_SEALING 300 /* Maximum sealing temperatura value*/
+#define MAX_VOLTAGE_RMS 5000 /* Maximum RMS voltage *100 */
+#define MAX_CURRENT_RMS 4000 /* Maximum RMS current *100 */
+#define MIN_SENSOR_VAL 250 /* Ignore sensor current/voltage < 250/100 */
+#define POT_HYSTERESIS 5 /* Temperature hysteresis - Only update sealing if new pot temp is above this*/
