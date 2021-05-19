@@ -222,15 +222,15 @@ void updateDisplay(int state, int input_start, int input_preheat, int input_seal
     Serial1.print("\"");
     terminateMessage();
 
-    Serial1.print("n0.val=");
+    Serial1.print("tempval.val=");
     Serial1.print(temp_measured);
     terminateMessage();
 
-    Serial1.print("n1.val=");
+    Serial1.print("preheatval.val=");
     Serial1.print(temp_preheat);
     terminateMessage();
 
-    Serial1.print("n2.val=");
+    Serial1.print("sealval.val=");
     Serial1.print(temp_sealing);
     terminateMessage();
 

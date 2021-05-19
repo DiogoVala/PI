@@ -51,10 +51,10 @@
 #define PERIOD_DISPLAY 100000
 
 /*Sensors*/
-#define CURRENT_M 3846 /* Linearization slope */
+#define CURRENT_M 2.59973 /* Linearization slope */
 #define CURRENT_B 5321 /* Linearization constant */
-#define VOLTAGE_M 2209 /* Linearization slope */
-#define VOLTAGE_B 7500 /* Linearization constant */
+#define VOLTAGE_M 3.64798F /* Linearization slope */
+#define VOLTAGE_B 7466 /* Linearization constant */
 #define TEMP_COEF 0.001F /* Example of temperature coefficient */
 #define R_ZERO 1.01F /* Resistance of heatband at reference temperature */
 #define T_ZERO 20 /* Reference temperature */
@@ -66,5 +66,5 @@
 #define MAX_SEALING 300 /* Maximum sealing temperatura value*/
 #define MAX_VOLTAGE_RMS 5000 /* Maximum RMS voltage *100 */
 #define MAX_CURRENT_RMS 4000 /* Maximum RMS current *100 */
-#define MIN_SENSOR_VAL 250 /* Ignore sensor current/voltage < 250/100 */
+#define MIN_SENSOR_VAL 200 /* Ignore sensor current/voltage < X */
 #define POT_HYSTERESIS 5 /* Temperature hysteresis - Only update sealing if new pot temp is above this*/

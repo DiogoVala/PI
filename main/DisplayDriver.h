@@ -24,11 +24,85 @@ enum Page {
 	pg_NETWORK
 };
 
+/********************************************************************
+   Function:    InitDisplay()
+   Precondition: 
+   Input:      
+   Returns:
+
+   Side Effects: Uses Serial1 with 115000 baudrate
+
+   Overview:    Initializes display module
+
+   Note:     
+
+ ********************************************************************/
 void InitDisplay();
-//void sendCommand(const char* text);
+
+
+/********************************************************************
+   Function:    updateDisplay()
+   Precondition: Display must be initialized
+   Input:      current state machine state;
+   			   current input states
+   Returns:
+
+   Side Effects:
+
+   Overview:   Updates current display page
+
+   Note:     
+
+ ********************************************************************/
 void updateDisplay(int state, int input_start, int input_preheat, int input_sealing);
+
+
+/********************************************************************
+   Function:    eventCheck()
+   Precondition: Display must be initialized
+   Input:      
+   Returns:
+
+   Side Effects:
+
+   Overview:    Checks interrupt flags from display events
+
+   Note:     
+
+ ********************************************************************/
 void eventCheck();
+
+
+/********************************************************************
+   Function:    errorPage()
+   Precondition: Display must be initialized
+   Input:       error code
+   Returns:
+
+   Side Effects:
+
+   Overview:    Forces error page with error message according
+   				to error code
+
+   Note:     
+
+ ********************************************************************/
 void errorPage(int8_t error_code);
+
+
+/********************************************************************
+   Function:    resetDisplay()
+   Precondition: Display must be initialized
+   Input:      
+   Returns:
+
+   Side Effects:
+
+   Overview:    Resets display parameters and forces reboot
+
+   Note:     
+
+ ********************************************************************/
 void resetDisplay();
 
 #endif

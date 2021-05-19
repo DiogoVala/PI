@@ -295,15 +295,24 @@ static void controlTemp(uint16_t setpoint) {
 
 static int32_t sampleCurrent() {
   int32_t sample = 0;
-  sample = analogRead(ANALOGpin_current)*10000;
-  sample = (sample/CURRENT_M)-CURRENT_B;
+  sample = analogRead(ANALOGpin_current);
+  sample = (sample * CURRENT_M)-CURRENT_B;
+  if (abs(sample) < MIN_SENSOR_VAL)
+  {
+    sample=0;
+  }
   return sample;
 }
 
 static int32_t sampleVoltage() {
   int32_t sample = 0;
-  sample = analogRead(ANALOGpin_voltage)*10000;
-  sample = (sample * VOLTAGE_M)-VOLTAGE_M; /* [0 , 330000] V */
+  sample = analogRead(ANALOGpin_voltage);
+  sample = (sample * VOLTAGE_M)-VOLTAGE_B;
+
+  if (abs(sample) < MIN_SENSOR_VAL)
+  {
+    sample=0;
+  }
   return sample;
 }
 
@@ -520,12 +529,6 @@ void loop() {
       if(current_rms>MAX_CURRENT_RMS)
       {
         errorHandler(ERROR_MAX_CURRENT_EXCEEDED);
-      }
-
-      if(current_rms<MIN_SENSOR_VAL && voltage_rms<MIN_SENSOR_VAL) /*Ignore small values*/
-      {
-        voltage_rms=1.01;
-        current_rms=1;
       }
 
       resistance_rms = voltage_rms / current_rms;
