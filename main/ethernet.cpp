@@ -2,17 +2,18 @@
 #include "config.h"
 #include "ethernet.h"
 #include "ethernetAPI.h"
+#include <EEPROM.h>
+#include "EEPROM_addresses.h"
 
-#define ETHERNET_ONLINE 0
-#define ETHERNET_OFFLINE -1
-
-volatile uint16_t network_port=80;
+volatile uint16_t network_port;
 
 // Enter a MAC address for your controller below.
 byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
 
+volatile uint8_t static_ip_arr[IP_ARRAY_SIZE] = {0};
+
 // IP address in case DHCP fails
-IPAddress ip(192,168,2,2);
+IPAddress static_ip;
 
 // Ethernet server
 EthernetServer server(0);
@@ -65,8 +66,10 @@ float read_current(){
   return current_rms;
 }
 
-void InitEthernet()
+int8_t InitEthernet()
 {
+  EEPROM.get(ADDRESS_NETWORK_PORT, network_port);
+
   server = EthernetServer(network_port);
 
   // Function to be exposed
@@ -80,13 +83,7 @@ void InitEthernet()
   rest.set_id("0001");
   rest.set_name("Termorregulador");
 
-  // Start the Ethernet connection and the server
-  if (Ethernet.begin(mac) == 0) {
-    //Serial.println("Failed to configure Ethernet using DHCP");
-    Ethernet.begin(mac, ip);
-  }
-
-  server.begin();
+  Ethernet.begin(mac, static_ip); /* Connect using static IP */
 
 }
 
@@ -101,6 +98,59 @@ int8_t linkStatus(){
 
 const char* getIP(){
   Serial1.print(Ethernet.localIP());
+}
+
+int8_t setNetPort(uint32_t port) {
+  int8_t error_code=0;
+
+  Serial.println(port);
+  if(port > INT16_MAX)
+  {
+    error_code = ERROR_INVALID_NETWORK_PORT;
+  }
+  else
+  {
+    network_port=port;
+    EEPROM.put(ADDRESS_NETWORK_PORT, port);
+  }
+  return error_code;
+}
+
+void strToIP(const char * str) {
+
+  uint8_t j=0;
+  static_ip_arr[j]=0;
+
+  for(int i=0; i<IP_LENGTH; i++)
+  {
+    if(str[i]!='.' && str[i]!='\0')
+    {
+      static_ip_arr[j]=static_ip_arr[j]*10+(int)str[i]-48; /* Save valid digit as integer */
+    }
+    else
+    {
+      j++;
+      static_ip_arr[j]=0;
+    }
+  }
+}
+
+int8_t setIP(const char* ip) {
+  int8_t error_code=0;
+
+  if(static_ip.fromString(ip) ==  0)
+  {
+    error_code = ERROR_INVALID_IP;
+  }
+  else
+  {
+    strToIP(ip);
+    for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
+    {
+      EEPROM.put(ADDRESS_STATIC_IP+i, static_ip_arr[i]);
+    }
+  }
+  return error_code;
 }
 
 void stopEthernet(){

@@ -4,12 +4,23 @@
 #include "statemachine.h"
 #include "error_handler.h"
 #include "config.h"
+#include <EEPROM.h>
+#include "EEPROM_addresses.h"
+#include <NativeEthernet.h>
 
 #define DISPLAY_BAUDRATE 115200
 #define GRAPH_Y_RESOLUTION 160
 #define GRAPH_MAX_TEMPERATURE 320
 #define GRAPH_MAX_VOLTAGE 50
 #define GRAPH_MAX_CURRENT 50
+
+volatile uint32_t current_page = 0;
+volatile uint8_t network_state = 0;
+volatile uint8_t allow_return = 1;
+volatile char* local_IP={0};
+volatile char* local_linkstatus={0};
+
+char buffer[100] = {0};
 
 /*Home page*/
 NexPage page_home = NexPage(1, 0, "Home");  // Page added as a touch event
@@ -45,7 +56,8 @@ NexPage page_error = NexPage(8, 0, "Error");  // Page added as a touch event
 /*Network page*/
 NexPage page_network = NexPage(9, 0, "Network");  // Page added as a touch event
 NexButton btn_netonoff = NexButton(9, 3, "onoff");  // Button added
-NexNumber num_port = NexNumber(9, 7, "n0"); // Text box added, so we can read it
+NexNumber num_port = NexNumber(9, 5, "portval"); // Text box added, so we can read it
+NexText staticip = NexText(9, 17, "staticipval");  // Text box added, so we can read it
 
 NexTouch *nex_listen_list[] = 
 {
@@ -63,12 +75,6 @@ NexTouch *nex_listen_list[] =
   NULL  // String terminated
 };  // End of touch event list
 
-volatile uint32_t current_page = 0;
-volatile uint8_t network_state = 0;
-volatile uint8_t allow_return = 1;
-volatile char* local_IP={0};
-volatile char* local_linkstatus={0};
-
 /* Function prototypes */
 extern void pauseSystem();
 extern void unpauseSystem();
@@ -82,13 +88,24 @@ void btn_netonoff_PopCallback(void *ptr)
   uint32_t local_port=0;
 
   if(network_state == 0)
-  {  
-    pauseSystem();
+  { 
+    memset(buffer, 0, sizeof(buffer)); /* Clear buffer for IP */
+    staticip.getText(buffer, sizeof(buffer)); /* Get IP string from textbox */
+    strcat(buffer,"\0");
+
+    if(setIP(buffer)==ERROR_INVALID_IP);
+    {
+       Serial1.print("staticipval.txt=\"IP Inválido\"");
+    }
+
     num_port.getValue(&local_port);
-    network_port=local_port;
-    Serial.println(network_port);
+    setNetPort(local_port);
+    Serial.println(local_port);
+
     Serial1.print("t3.txt=\"A conectar ...\"");
     terminateMessage();
+
+    pauseSystem();
 
     InitEthernet();
 
@@ -164,9 +181,23 @@ void ErrorPagePushCallback(void *ptr)
 
 void NetworkPagePushCallback(void *ptr)
 {
+  EEPROM.get(ADDRESS_NETWORK_PORT, network_port);
   current_page = pg_NETWORK;
   Serial1.print("n0.val=");
   Serial1.print(network_port);
+  terminateMessage();
+
+  Serial1.print("staticipval.txt=\"");
+  for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
+  {
+    EEPROM.get(ADDRESS_STATIC_IP+i, static_ip_arr[i]);
+    Serial1.print(static_ip_arr[i]);
+    if (i < (IP_ARRAY_SIZE -1)) 
+    {
+      Serial1.print(".");
+    }
+  }
+  Serial1.print("\"");
   terminateMessage();
 }
 
@@ -200,7 +231,7 @@ void updateDisplay(int state, int input_start, int input_preheat, int input_seal
 
   if(current_page == pg_HOME)
   {
-    Serial1.print("t2.txt=\"");  // This is sent to the nextion display to set what object name (before the dot) and what atribute (after the dot) are you going to change.
+    Serial1.print("t2.txt=\"");
     switch(state)
     {
       case st_IDLE: 
@@ -307,7 +338,7 @@ void updateDisplay(int state, int input_start, int input_preheat, int input_seal
         terminateMessage(); 
       }
 
-      Serial1.print("t4.txt=\"");
+      Serial1.print("t4.txt=\"Servidor em: ");
       getIP();
       Serial1.print("\"");
       terminateMessage();

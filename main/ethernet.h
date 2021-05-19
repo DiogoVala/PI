@@ -1,14 +1,20 @@
 #ifndef ETHERNET_H
 #define ETHERNET_H
 
+#define IP_ARRAY_SIZE 4
+#define IP_LENGTH 15
+
 #define ETHERNET_ONLINE 0
 #define ETHERNET_OFFLINE -1
+#define ERROR_INVALID_IP -2
+#define ERROR_INVALID_NETWORK_PORT -3
 
 extern volatile uint32_t temp_sealing;
 extern volatile uint32_t temp_preheat;
 extern volatile uint32_t temp_measured;
 extern volatile float current_rms;
 extern volatile float voltage_rms;
+
 
 
 /********************************************************************
@@ -24,7 +30,7 @@ extern volatile float voltage_rms;
    Note:     Uses port 0 as default port
 
  ********************************************************************/
-void InitEthernet();
+int8_t InitEthernet();
 
 
 /********************************************************************
@@ -41,6 +47,10 @@ void InitEthernet();
 
  ********************************************************************/
 int8_t linkStatus();
+
+int8_t setNetPort(uint32_t port);
+
+int8_t setIP(const char* ip);
 
 
 /********************************************************************

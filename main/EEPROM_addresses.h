@@ -1,0 +1,7 @@
+#ifndef EEPROM_ADDRESSES_H
+#define EEPROM_ADDRESSES_H
+
+#define ADDRESS_NETWORK_PORT 5
+#define ADDRESS_STATIC_IP 10
+
+#endif

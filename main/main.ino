@@ -45,8 +45,8 @@ static volatile int64_t sum_voltage = 0; /* Storage of voltage samples*/
 /*Control*/
 static volatile uint32_t temp_setpoint = 0; /* Internal setpoint to be applied to control routine*/
 static volatile uint32_t temp_pot = 0;
-volatile uint32_t temp_sealing = 100; /* Value defined by user*/
-volatile uint32_t temp_preheat = 100; /* Value defined by user*/
+volatile uint32_t temp_sealing = 0; /* Value defined by user*/
+volatile uint32_t temp_preheat = 0; /* Value defined by user*/
 volatile uint32_t temp_measured = 0; /* Calculated value from resistance */
 volatile float current_rms = 0;
 volatile float voltage_rms = 0;
@@ -127,10 +127,7 @@ static void sm_execute_main(sm_t *psm) {
     }
     if (psm->last_event == ev_RESET)
     {
-      resetDisplay();
-      duty_cycle=0;
-      sm_init(&sub_machine, st_IDLE);
-      psm->last_event = ev_NULL;
+      sysReset();
     }
 
     sm_execute_sub(&sub_machine);
@@ -343,23 +340,36 @@ static void printState(sm_t *psm) {
   }
 }
 
-static void errorHandler(int8_t error_code){
+static void errorHandler(int8_t error_code) {
 #if ERRORCHECKING
   errorPage(error_code);
   sm_send_event(&main_machine, ev_OK_LOW);
 #endif
 }
 
-void pauseSystem(){
+void pauseSystem() {
   flag_execute = false;
   flag_control = false;
   flag_sampling = false;
 }
 
-void unpauseSystem(){
+void unpauseSystem() {
   main_machine.current_state=st_ON;
   sub_machine.current_state=st_IDLE;
   flag_execute = true;
+}
+
+void sysReset() {
+  sample_count = 0;
+  sum_current = 0;
+  sum_voltage = 0;
+  duty_cycle=0;
+  temp_sealing=0;
+  temp_preheat=0;
+  temp_setpoint=0;
+  sm_init(&sub_machine, st_IDLE);
+  sm_init(&main_machine, st_ON);
+  resetDisplay();
 }
 
 void setup() {
@@ -411,7 +421,8 @@ void setup() {
 
 void loop() {
   ListenClient();
-  
+  eventCheck(); /*Display Polling*/
+
   /*Old states of input signals for polling*/
   static uint8_t enable_state = LOW;
   static uint8_t start_state = LOW;
@@ -427,7 +438,6 @@ void loop() {
   /* Polling*/
   if (count_polling >= COUNT_POLLING)
   {
-    eventCheck(); /*Display Polling*/
 
     /* Reset pin*/
     if (digitalRead(IOpin_reset) != reset_state)

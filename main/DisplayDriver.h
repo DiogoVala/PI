@@ -3,6 +3,7 @@
 
 
 #include <Nextion.h> 
+#include "ethernet.h"
 
 extern volatile uint16_t network_port;
 extern volatile uint32_t temp_sealing;
@@ -10,6 +11,7 @@ extern volatile uint32_t temp_preheat;
 extern volatile uint32_t temp_measured;
 extern volatile float current_rms;
 extern volatile float voltage_rms;
+extern volatile uint8_t static_ip_arr[IP_ARRAY_SIZE];
 
 enum Page {
 	pg_START,
