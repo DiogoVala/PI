@@ -103,15 +103,14 @@ const char* getIP(){
 int8_t setNetPort(uint32_t port) {
   int8_t error_code=0;
 
-  Serial.println(port);
-  if(port > INT16_MAX)
+  if(port > UINT16_MAX)
   {
     error_code = ERROR_INVALID_NETWORK_PORT;
   }
   else
   {
     network_port=port;
-    EEPROM.put(ADDRESS_NETWORK_PORT, port);
+    EEPROM.put(ADDRESS_NETWORK_PORT, network_port);
   }
   return error_code;
 }
@@ -138,18 +137,18 @@ void strToIP(const char * str) {
 int8_t setIP(const char* ip) {
   int8_t error_code=0;
 
-  if(static_ip.fromString(ip) ==  0)
-  {
-    error_code = ERROR_INVALID_IP;
-  }
-  else
-  {
-    strToIP(ip);
-    for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
+    if(static_ip.fromString(ip) == 0)
     {
-      EEPROM.put(ADDRESS_STATIC_IP+i, static_ip_arr[i]);
+      error_code = ERROR_INVALID_IP;
     }
-  }
+    else
+    {
+      strToIP(ip);
+      for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
+      {
+        EEPROM.put(ADDRESS_STATIC_IP+i, static_ip_arr[i]);
+      }
+    }
   return error_code;
 }
 

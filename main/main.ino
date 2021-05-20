@@ -46,11 +46,11 @@ static volatile int64_t sum_voltage = 0; /* Storage of voltage samples*/
 static volatile uint32_t temp_setpoint = 0; /* Internal setpoint to be applied to control routine*/
 static volatile uint32_t temp_pot = 0;
 volatile uint32_t temp_sealing = 0; /* Value defined by user*/
-volatile uint32_t temp_preheat = 0; /* Value defined by user*/
+volatile uint32_t temp_preheat = 100; /* Value defined by user*/
 volatile uint32_t temp_measured = 0; /* Calculated value from resistance */
 volatile float current_rms = 0;
 volatile float voltage_rms = 0;
-volatile int16_t duty_cycle = 0; /* 0 to 4095 - PWM duty cycle for the control signal*/
+volatile double duty_cycle = 0; /* 0 to 4095 - PWM duty cycle for the control signal*/
 
 /*Hardware timer*/
 IntervalTimer Timer_Main; /* Interrupt timer*/
@@ -107,6 +107,11 @@ static void sm_execute_main(sm_t *psm) {
     flag_sampling=false;
     flag_control=false;
 
+    sample_count = 0;
+    sum_current = 0;
+    sum_voltage = 0;
+    duty_cycle=0;
+    temp_measured = 0;
     /*Transitions*/
     if (psm->last_event == ev_ENABLE_HIGH)
     {
@@ -127,7 +132,7 @@ static void sm_execute_main(sm_t *psm) {
     }
     if (psm->last_event == ev_RESET)
     {
-      sysReset();
+      //sysReset();
     }
 
     sm_execute_sub(&sub_machine);
@@ -246,21 +251,25 @@ static void sm_execute_sub(sm_t *psm) {
 
 static void controlTemp(uint16_t setpoint) {
 
-  static int16_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
-  static int32_t integral = 0; /* Integral component of PID*/
-  static int32_t derivative = 0; /* Derivative component of PID*/
+  static int32_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
+  static double integral = 0; /* Integral component of PID*/
+  static double derivative = 0; /* Derivative component of PID*/
+  static double proportional = 0;
 
-  int16_t new_duty_cycle = duty_cycle;
-  int16_t temp_error = setpoint - temp_measured;
+  int32_t new_duty_cycle = duty_cycle;
+  int32_t temp_error = setpoint - temp_measured;
+
+  proportional=temp_error;
 
   /*Controlo*/
-  derivative=(temp_error_old-temp_error)/2;
+  derivative=(temp_error-temp_error_old)/0.02;
 
   integral += temp_error;
   if (integral >  INTEGRAL_CLAMP) integral =  INTEGRAL_CLAMP;
   if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP;
 
-  new_duty_cycle += ((temp_error*PID_KP) + (integral*PID_KI) + (derivative/PID_KD));
+  //new_duty_cycle += PID_KP*(temp_error+integral/PID_TI+derivative*PID_TD);
+  new_duty_cycle += ((proportional/PID_KP) + (integral/PID_KI) + (derivative/PID_KD));
 
   if (new_duty_cycle > MAX_DUTY_CYCLE) {
     new_duty_cycle = MAX_DUTY_CYCLE;
@@ -268,15 +277,23 @@ static void controlTemp(uint16_t setpoint) {
   else if (new_duty_cycle < MIN_DUTY_CYCLE) {
     new_duty_cycle = MIN_DUTY_CYCLE;
   }
+//Serial.println(new_duty_cycle);
 
-#if DEBUGGING
-  Serial.print("Derivative: ");
-  Serial.println(derivative/PID_KD);
+#if 1
+  Serial.print("\n");
   Serial.print("Integral: ");
   Serial.println(integral/PID_KI);
   Serial.print("Proportional: ");
   Serial.println(temp_error/PID_KP);
+  Serial.print("Derivative: ");
+  Serial.println(derivative/PID_KD);
   Serial.print("DC: ");
+  Serial.println(new_duty_cycle);
+  Serial.print("Temp: ");
+  Serial.println(temp_measured);
+#endif
+#if 0
+  
   Serial.println(new_duty_cycle);
   Serial.print("Temp: ");
   Serial.println(temp_measured);
@@ -287,29 +304,34 @@ static void controlTemp(uint16_t setpoint) {
 #endif
 
   duty_cycle = new_duty_cycle;
+  
   analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
+  //analogWrite(CTRLpin_PWM, 0.2*MAX_DUTY_CYCLE); /* Sinal de controlo do controlador*/
 }
 
 static int32_t sampleCurrent() {
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_current);
-  sample = (sample * CURRENT_M)-CURRENT_B;
+  sample = (sample * CURRENT_M)-CURRENT_B+50;
+  
   if (abs(sample) < MIN_SENSOR_VAL)
   {
     sample=0;
   }
+  
   return sample;
 }
 
 static int32_t sampleVoltage() {
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_voltage);
-  sample = (sample * VOLTAGE_M)-VOLTAGE_B;
-
+  sample = (sample * VOLTAGE_M)-VOLTAGE_B+150;
+ //Serial.println(sample);
   if (abs(sample) < MIN_SENSOR_VAL)
   {
     sample=0;
   }
+  //Serial.println(sample);
   return sample;
 }
 
@@ -364,9 +386,6 @@ void sysReset() {
   sum_current = 0;
   sum_voltage = 0;
   duty_cycle=0;
-  temp_sealing=0;
-  temp_preheat=0;
-  temp_setpoint=0;
   sm_init(&sub_machine, st_IDLE);
   sm_init(&main_machine, st_ON);
   resetDisplay();
@@ -529,13 +548,13 @@ void loop() {
 
     if(sample_count>=SAMPLES_PER_PERIOD)
     {
-      voltage_rms = sqrt(sum_voltage / sample_count);
+      voltage_rms = sqrt(sum_voltage / SAMPLES_PER_PERIOD);
       if(voltage_rms>MAX_VOLTAGE_RMS)
       {
         errorHandler(ERROR_MAX_VOLTAGE_EXCEEDED);
       }
 
-      current_rms = sqrt(sum_current / sample_count);
+      current_rms = sqrt(sum_current / SAMPLES_PER_PERIOD);
       if(current_rms>MAX_CURRENT_RMS)
       {
         errorHandler(ERROR_MAX_CURRENT_EXCEEDED);

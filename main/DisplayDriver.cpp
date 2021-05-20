@@ -85,7 +85,7 @@ void terminateMessage();
 
 void btn_netonoff_PopCallback(void *ptr)
 {
-  uint32_t local_port=0;
+  uint32_t local_port;
 
   if(network_state == 0)
   { 
@@ -96,11 +96,20 @@ void btn_netonoff_PopCallback(void *ptr)
     if(setIP(buffer)==ERROR_INVALID_IP);
     {
        Serial1.print("staticipval.txt=\"IP Inválido\"");
+       terminateMessage();
     }
 
     num_port.getValue(&local_port);
-    setNetPort(local_port);
-    Serial.println(local_port);
+
+    if(setNetPort(local_port)==ERROR_INVALID_NETWORK_PORT)
+    {
+       Serial1.print("t3.txt=\"Porta Inválida\"");
+       terminateMessage();
+    }
+
+    Serial1.print("portval.val=");
+    Serial1.print(local_port);
+    terminateMessage();
 
     Serial1.print("t3.txt=\"A conectar ...\"");
     terminateMessage();
@@ -340,6 +349,8 @@ void updateDisplay(int state, int input_start, int input_preheat, int input_seal
 
       Serial1.print("t4.txt=\"Servidor em: ");
       getIP();
+      Serial1.print(":");
+      Serial1.print(network_port);
       Serial1.print("\"");
       terminateMessage();
     }

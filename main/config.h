@@ -34,10 +34,10 @@
 #define MIN_DUTY_CYCLE 0
 
 /*Control*/
-#define PID_KP 10
-#define PID_KI 5
-#define PID_KD 10
-#define INTEGRAL_CLAMP 20
+#define PID_KP 5
+#define PID_KI 10
+#define PID_KD 1000
+#define INTEGRAL_CLAMP 10
 
 /*Main timekeeping period*/
 #define PERIOD_MAIN 100
@@ -45,8 +45,8 @@
 /*Periods ( in microseconds) */
 #define PERIOD_230V 20000
 #define PERIOD_POLLING 100
-#define PERIOD_SAMPLING 1000
-#define PERIOD_CONTROL 1000
+#define PERIOD_SAMPLING 100
+#define PERIOD_CONTROL 10000
 #define PERIOD_SM_EXECUTE 1000
 #define PERIOD_DISPLAY 100000
 
@@ -66,5 +66,5 @@
 #define MAX_SEALING 300 /* Maximum sealing temperatura value*/
 #define MAX_VOLTAGE_RMS 5000 /* Maximum RMS voltage *100 */
 #define MAX_CURRENT_RMS 4000 /* Maximum RMS current *100 */
-#define MIN_SENSOR_VAL 200 /* Ignore sensor current/voltage < X */
+#define MIN_SENSOR_VAL 50 /* Ignore sensor current/voltage < X */
 #define POT_HYSTERESIS 5 /* Temperature hysteresis - Only update sealing if new pot temp is above this*/
