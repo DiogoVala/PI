@@ -28,9 +28,9 @@
                 <ul >
                     <b>
                         <li><a href="insert.html"><i class="fas fa-home"></i>Inserir par&acircmetros</a></li>
-                        <li><a href="graf1.html"><i class="fas fa-user"></i>Gr&aacutefico1</a></li>
-                        <li><a href="graf2.html"><i class="fas fa-address-card"></i>Gr&aacutefico2</a></li>
-                        <li><a href="graf3.html"><i class="fas fa-project-diagram"></i>Gr&aacutefico3</a></li>
+                        <li><a href="graf1.html"><i class="fas fa-user"></i>Temperatura</a></li>
+                        <li><a href="graf2.html"><i class="fas fa-address-card"></i>Tens&atildeo</a></li>
+                        <li><a href="graf3.html"><i class="fas fa-project-diagram"></i>Corrente</a></li>
                     </b>
                 </ul> 
             </div>
@@ -38,38 +38,45 @@
             <div class="main_content">
                 <div class="header">
                     <h1>
-                        Gr&aacutefico 3
+                        Gr&aacutefico da Corrente
                     </h1>
-
-                    <p>W</p>
                 </div>  
 
                 <div id="chart"></div>
 
                 <script>
+                    let a;
+                    getData()
                     function getData() {
-                        return Math.random()*5;
+                        fetch('http://192.168.1.169/read_temp')
+                          .then(function(response) {
+                            return response.text();
+                          })
+                          .then(function(text) {
+                            a = parseInt(text);
+                            return text;
+                          })
                     }  
 
                     Plotly.plot('chart',[{
-                        y:[getData()],
+                        y:[a],
                         type:'line'
                     }]);
 
                     var cnt = 0;
 
                     setInterval(function(){
-                        Plotly.extendTraces('chart',{ y:[[getData()]]}, [0]);
+                        getData()
+                        Plotly.extendTraces('chart',{ y:[[a]]}, [0]);
                         cnt++;
-                        
-                        if(cnt > 10) {
+                        if(cnt > 300) {
                             Plotly.relayout('chart',{
                                 xaxis: {
-                                    range: [cnt-10,cnt]
+                                    range: [cnt-300,cnt]
                                 }
                             });
                         }
-                    },1000);    // isto vai atualizar o gráfico de 1 em 1 seg
+                    },200);    // isto vai atualizar o gráfico de 200 em 200 milisegundos
                 </script>
             </div>
         </div>        
