@@ -4,7 +4,7 @@
 // Include Arduino header
 #include "Arduino.h"
 
-#define OUTPUT_BUFFER_SIZE 350
+#define OUTPUT_BUFFER_SIZE 10000
 //#endif
 
 // Hardware data
@@ -123,7 +123,7 @@ public:
 // Send HTTP headers for Ethernet & WiFi
 void send_http_headers(){
 
-  addToBufferF(F("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, PUT, OPTIONS\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n"));
+  //addToBufferF(F("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, PUT, OPTIONS\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n"));
  
 }
 

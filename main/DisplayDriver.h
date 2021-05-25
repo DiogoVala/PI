@@ -3,6 +3,7 @@
 
 #include <Nextion.h> 
 #include "ethernet.h"
+#include "error_handler.h"
 
 extern volatile uint32_t temp_sealing;
 extern volatile uint32_t temp_preheat;
@@ -17,6 +18,8 @@ extern volatile float temp_coef;
 extern volatile float r_zero;
 extern volatile uint16_t network_port;
 extern volatile uint8_t static_ip_arr[IP_ARRAY_SIZE];
+extern volatile uint16_t error_count;
+extern volatile uint8_t error_log[ERROR_LOG_SIZE];
 
 enum Page {
 	pg_START,

@@ -18,6 +18,9 @@ IPAddress static_ip;
 // Ethernet server
 EthernetServer server(0);
 
+//Ethernet client
+EthernetClient client;
+
 // Create aREST instance
 aREST rest = aREST();
 
@@ -66,6 +69,22 @@ int read_current(){
   return (int)current_rms/100;
 }
 
+int print_log(){
+  char buffer[10000];
+  char intbuf[10];
+  memset(buffer, 0, sizeof(buffer)); /* Clear buffer for IP */
+  memset(intbuf, 0, sizeof(intbuf)); /* Clear buffer for IP */
+
+  for(uint16_t i = 0; i<error_count; i++)
+  {
+    snprintf(intbuf, sizeof(intbuf), "%d:%d; ", i+1, error_log[i]);
+    strcat(buffer, intbuf);
+  } 
+  client.print("Error log: \n");
+  client.println(buffer);
+}
+
+
 int8_t InitEthernet()
 {
   server = EthernetServer(network_port);
@@ -76,11 +95,13 @@ int8_t InitEthernet()
   rest.function("read_temp",read_temp);
   rest.function("read_voltage",read_voltage);
   rest.function("read_current",read_current);
+  rest.function("log",print_log);
 
   // Give name & ID to the device (ID should be 6 characters long)
   rest.set_id("0001");
   rest.set_name("Termorregulador");
 
+  Serial.println(static_ip);
   Ethernet.begin(mac, static_ip); /* Connect using static IP */
 
 }
@@ -104,11 +125,9 @@ int8_t setNetPort(uint32_t port) {
   if(port > UINT16_MAX)
   {
     error_code = ERROR_INVALID_NETWORK_PORT;
-    Serial.println("Here");
   }
   else
   {
-    Serial.println("Here1");
     network_port=port;
     writeInt16ToEEPROM(ADDR_NETWORK_PORT, (uint16_t)network_port);
   }
@@ -137,18 +156,17 @@ void strToIP(const char * str) {
 int8_t setIP(const char* ip) {
   int8_t error_code=0;
 
-    if(static_ip.fromString(ip) == 0)
+  strToIP(ip);
+  for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
+  {
+    writeInt8ToEEPROM(ADDR_STATIC_IP+i, static_ip_arr[i]);
+    if(static_ip_arr[i]>255)
     {
       error_code = ERROR_INVALID_IP;
+      break;
     }
-    else
-    {
-      strToIP(ip);
-      for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
-      {
-        writeInt8ToEEPROM(ADDR_STATIC_IP+i, static_ip_arr[i]);
-      }
-    }
+    static_ip[i]=static_ip_arr[i];
+  }
   return error_code;
 }
 
@@ -157,6 +175,6 @@ void stopEthernet(){
 }
 
 void ListenClient(){
-  EthernetClient client = server.available();
+  client = server.available();
   rest.handle(client);
 }

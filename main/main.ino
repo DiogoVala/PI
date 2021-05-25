@@ -65,6 +65,10 @@ volatile float r_zero = 1.01;
 extern volatile uint16_t network_port;
 extern volatile uint8_t static_ip_arr[IP_ARRAY_SIZE];
 
+/*Error Logging*/
+volatile uint16_t error_count = 0;
+volatile uint8_t error_log[ERROR_LOG_SIZE]={0};
+
 /*Hardware timer*/
 IntervalTimer Timer_Main; /* Interrupt timer*/
 
@@ -365,8 +369,21 @@ static void printState(sm_t *psm) {
 
 static void errorHandler(int16_t error_code) {
 #if ERRORCHECKING
-  errorPage(error_code);
-  //sm_send_event(&main_machine, ev_OK_LOW);
+  static int16_t last_error = 0;
+  if(last_error != error_code)
+  {
+    writeInt16ToEEPROM(ADDR_ERROR_COUNT, error_count);
+    writeInt8ToEEPROM(ADDR_ERROR_LOG+error_count, error_code);
+    error_log[error_count]=error_code;
+    error_count++;
+    if(error_count>ERROR_LOG_SIZE)
+    {
+      error_count=0;
+    }
+    //errorPage(error_code);
+    last_error=error_code;
+    //sm_send_event(&main_machine, ev_OK_LOW);
+  }
 #endif
 }
 
@@ -403,11 +420,21 @@ void loadMemory(){
   temp_coef = (float)readInt32FromEEPROM(ADDR_TEMP_COEF)/NUMBOX_TEMP_COEF;
   r_zero = (float)readInt16FromEEPROM(ADDR_R_ZERO)/NUMBOX_R_ZERO;
   network_port = readInt16FromEEPROM(ADDR_NETWORK_PORT);
+  error_count = readInt16FromEEPROM(ADDR_ERROR_COUNT);
+  Serial.println(error_count);
+  if(error_count>ERROR_LOG_SIZE)
+  {
+    error_count=ERROR_LOG_SIZE;
+  }
+  for (uint16_t i = 0; i<error_count; i++)
+  {
+    error_log[i]=readInt8FromEEPROM(ADDR_ERROR_LOG+i);
+    Serial.println(error_log[i]);
+  }
 
-  for (int i = 0; i<IP_ARRAY_SIZE; i++)
+  for (uint8_t i = 0; i<IP_ARRAY_SIZE; i++)
   {
     static_ip_arr[i] = readInt8FromEEPROM(ADDR_STATIC_IP+i);
-    Serial.println(static_ip_arr[i]);
   }
 }
 

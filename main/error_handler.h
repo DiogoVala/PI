@@ -10,6 +10,7 @@
 
 /* Error codes for the system */
 #define ERROR_CODE_SIZE 3
+#define ERROR_LOG_SIZE 3900
 
 #define ERROR_MAX_TEMPERATURE_EXCEEDED 100
 #define ERROR_MAX_VOLTAGE_EXCEEDED 101

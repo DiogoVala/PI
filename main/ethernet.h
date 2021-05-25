@@ -1,6 +1,8 @@
 #ifndef ETHERNET_H
 #define ETHERNET_H
 
+#include "error_handler.h"
+
 #define IP_ARRAY_SIZE 4
 #define IP_LENGTH 15
 
@@ -14,7 +16,8 @@ extern volatile uint32_t temp_preheat;
 extern volatile uint32_t temp_measured;
 extern volatile float current_rms;
 extern volatile float voltage_rms;
-
+extern volatile uint16_t error_count;
+extern volatile uint8_t error_log[ERROR_LOG_SIZE];
 
 
 /********************************************************************

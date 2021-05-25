@@ -42,7 +42,7 @@
 	34-IP
 	35-IP
 	36-Error count
-	37-Error Log
+	37-Error count
 	38-Error Log
 	...
 	86-Error Log
@@ -59,7 +59,7 @@
 #define ADDR_NETWORK_PORT 30
 #define ADDR_STATIC_IP 32
 #define ADDR_ERROR_COUNT 36
-#define ADDR_ERROR_LOG 37
+#define ADDR_ERROR_LOG 38
 
 
 void writeInt8ToEEPROM(uint16_t addr, uint8_t value);
