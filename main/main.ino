@@ -27,15 +27,20 @@
 #include "DisplayDriver.h"
 #include "error_handler.h"
 #include "config.h"
+#include "EEPROM_utils.h"
 
 #define DEBUGGING 0
-#define ERRORCHECKING 0
+#define ERRORCHECKING 1
 
 static const uint32_t COUNT_POLLING = (PERIOD_POLLING / PERIOD_MAIN);
 static const uint32_t COUNT_SAMPLING = (PERIOD_SAMPLING / PERIOD_MAIN);
 static const uint32_t COUNT_CONTROL = (PERIOD_CONTROL / PERIOD_MAIN);
 static const uint32_t COUNT_EXECUTE = (PERIOD_SM_EXECUTE / PERIOD_MAIN);
 static const uint32_t COUNT_DISPLAY = (PERIOD_DISPLAY / PERIOD_MAIN);
+
+static const uint32_t SAMPLES_PER_PERIOD = PERIOD_230V/PERIOD_SAMPLING;
+static volatile uint32_t calibration_current_sensor = 0;
+static volatile uint32_t calibration_voltage_sensor = 0;
 
 /* Sampling */
 static volatile uint8_t sample_count = 0; /* Counts samples taken */
@@ -51,6 +56,14 @@ volatile uint32_t temp_measured = 0; /* Calculated value from resistance */
 volatile float current_rms = 0;
 volatile float voltage_rms = 0;
 volatile double duty_cycle = 0; /* 0 to 4095 - PWM duty cycle for the control signal*/
+volatile float pid_kp=0.2; // 0.2
+volatile float pid_ki=0.1; // 0.1
+volatile float pid_kd=0.001; // 0.001 
+volatile uint32_t pid_int_limit=10; //10
+volatile float temp_coef = 0.001;
+volatile float r_zero = 1.01;
+extern volatile uint16_t network_port;
+extern volatile uint8_t static_ip_arr[IP_ARRAY_SIZE];
 
 /*Hardware timer*/
 IntervalTimer Timer_Main; /* Interrupt timer*/
@@ -262,14 +275,13 @@ static void controlTemp(uint16_t setpoint) {
   proportional=temp_error;
 
   /*Controlo*/
-  derivative=(temp_error-temp_error_old)/0.02;
+  derivative=(temp_error-temp_error_old)/((float)PERIOD_CONTROL/1000000);
 
   integral += temp_error;
-  if (integral >  INTEGRAL_CLAMP) integral =  INTEGRAL_CLAMP;
-  if (integral < -INTEGRAL_CLAMP) integral = -INTEGRAL_CLAMP;
+  if (integral >  pid_int_limit) integral =  pid_int_limit;
+  if (integral < -pid_int_limit) integral = -pid_int_limit;
 
-  //new_duty_cycle += PID_KP*(temp_error+integral/PID_TI+derivative*PID_TD);
-  new_duty_cycle += ((proportional/PID_KP) + (integral/PID_KI) + (derivative/PID_KD));
+  new_duty_cycle += ((proportional*pid_kp) + (integral*pid_ki) + (derivative*pid_kd));
 
   if (new_duty_cycle > MAX_DUTY_CYCLE) {
     new_duty_cycle = MAX_DUTY_CYCLE;
@@ -279,42 +291,31 @@ static void controlTemp(uint16_t setpoint) {
   }
 //Serial.println(new_duty_cycle);
 
-#if 1
+#if 0
   Serial.print("\n");
-  Serial.print("Integral: ");
-  Serial.println(integral/PID_KI);
   Serial.print("Proportional: ");
-  Serial.println(temp_error/PID_KP);
+  Serial.println(temp_error/pid_kp);
+  Serial.print("Integral: ");
+  Serial.println(integral/pid_ki);
   Serial.print("Derivative: ");
-  Serial.println(derivative/PID_KD);
+  Serial.println(derivative/pid_kd);
   Serial.print("DC: ");
   Serial.println(new_duty_cycle);
   Serial.print("Temp: ");
   Serial.println(temp_measured);
 #endif
-#if 0
-  
-  Serial.println(new_duty_cycle);
-  Serial.print("Temp: ");
-  Serial.println(temp_measured);
-  Serial.print("Voltage: ");
-  Serial.println(voltage_rms);
-  Serial.print("Current: ");
-  Serial.println(current_rms);
-#endif
 
   duty_cycle = new_duty_cycle;
   
   analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
-  //analogWrite(CTRLpin_PWM, 0.2*MAX_DUTY_CYCLE); /* Sinal de controlo do controlador*/
 }
 
 static int32_t sampleCurrent() {
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_current);
-  sample = (sample * CURRENT_M)-CURRENT_B+50;
+  sample = (sample * CURRENT_M)-CURRENT_B+calibration_current_sensor;
   
-  if (abs(sample) < MIN_SENSOR_VAL)
+  if (abs(sample) < MIN_SENSOR_VAL && flag_control == true)
   {
     sample=0;
   }
@@ -325,9 +326,9 @@ static int32_t sampleCurrent() {
 static int32_t sampleVoltage() {
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_voltage);
-  sample = (sample * VOLTAGE_M)-VOLTAGE_B+150;
+  sample = (sample * VOLTAGE_M)-VOLTAGE_B+calibration_voltage_sensor;
  //Serial.println(sample);
-  if (abs(sample) < MIN_SENSOR_VAL)
+  if (abs(sample) < MIN_SENSOR_VAL && flag_control == true)
   {
     sample=0;
   }
@@ -362,10 +363,10 @@ static void printState(sm_t *psm) {
   }
 }
 
-static void errorHandler(int8_t error_code) {
+static void errorHandler(int16_t error_code) {
 #if ERRORCHECKING
   errorPage(error_code);
-  sm_send_event(&main_machine, ev_OK_LOW);
+  //sm_send_event(&main_machine, ev_OK_LOW);
 #endif
 }
 
@@ -391,15 +392,38 @@ void sysReset() {
   resetDisplay();
 }
 
+void loadMemory(){
+
+  temp_preheat = readInt32FromEEPROM(ADDR_TEMP_PREHEAT);
+  temp_sealing = readInt32FromEEPROM(ADDR_TEMP_SEALING);
+  pid_kp = (float)readInt32FromEEPROM(ADDR_PID_KP)/NUMBOX_PID_K;
+  pid_ki =(float)readInt32FromEEPROM(ADDR_PID_KI)/NUMBOX_PID_K;
+  pid_kd = (float)readInt32FromEEPROM(ADDR_PID_KD)/NUMBOX_PID_K;
+  pid_int_limit = readInt32FromEEPROM(ADDR_PID_INT_LIM);
+  temp_coef = (float)readInt32FromEEPROM(ADDR_TEMP_COEF)/NUMBOX_TEMP_COEF;
+  r_zero = (float)readInt16FromEEPROM(ADDR_R_ZERO)/NUMBOX_R_ZERO;
+  network_port = readInt16FromEEPROM(ADDR_NETWORK_PORT);
+
+  for (int i = 0; i<IP_ARRAY_SIZE; i++)
+  {
+    static_ip_arr[i] = readInt8FromEEPROM(ADDR_STATIC_IP+i);
+    Serial.println(static_ip_arr[i]);
+  }
+}
+
 void setup() {
   /*Uart settings
     Data bits - 8
     Parity    - None
     Stop bits - 1
   */
+  
+
   Serial.begin(UART_BAUDRATE);
   Serial.print("\x1b[2J"); /*Clear screen*/
   Serial.println("Starting...");
+
+  loadMemory();
 
   /*Analog Pins*/
   analogReadRes(ADC_RESOLUTION);
@@ -536,36 +560,65 @@ void loop() {
   /*Sampling*/
   if (count_sampling >= COUNT_SAMPLING && flag_sampling == true)
   {
-
+    static int32_t calibration_sum_current = 0;
+    static int32_t calibration_sum_voltage = 0;
     int32_t sample;
+
     sample=sampleCurrent();
     sum_current += sample*sample;
+    if(flag_control==false) { calibration_sum_current += sample;}
 
     sample=sampleVoltage();
     sum_voltage += sample*sample;
+    if(flag_control==false) { calibration_sum_voltage += sample;}
 
     sample_count++;
 
     if(sample_count>=SAMPLES_PER_PERIOD)
     {
+      if(flag_control==false)
+      {
+        calibration_current_sensor=calibration_sum_current/SAMPLES_PER_PERIOD;
+        calibration_voltage_sensor=calibration_sum_voltage/SAMPLES_PER_PERIOD;  
+        calibration_current_sensor=0;
+        calibration_voltage_sensor=0;
+      }
+      else
+      {
+        calibration_current_sensor=0;
+        calibration_voltage_sensor=0;
+      }
+
       voltage_rms = sqrt(sum_voltage / SAMPLES_PER_PERIOD);
+      current_rms = sqrt(sum_current / SAMPLES_PER_PERIOD);
+      resistance_rms = voltage_rms / current_rms;
+      temp_measured = (resistance_rms*T_slope-T_b);/* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
+
       if(voltage_rms>MAX_VOLTAGE_RMS)
       {
         errorHandler(ERROR_MAX_VOLTAGE_EXCEEDED);
       }
-
-      current_rms = sqrt(sum_current / SAMPLES_PER_PERIOD);
-      if(current_rms>MAX_CURRENT_RMS)
+      else if(current_rms>MAX_CURRENT_RMS)
       {
         errorHandler(ERROR_MAX_CURRENT_EXCEEDED);
       }
-
-      resistance_rms = voltage_rms / current_rms;
-
-      /* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
-      temp_measured = (resistance_rms*T_slope-T_b);
-
-      if(temp_measured>MAX_TEMPERATURE)
+      else if(current_rms>voltage_rms)
+      {
+        errorHandler(ERROR_CURRENT_HIGHER_THAN_VOLTAGE);
+      }
+      else if (resistance_rms > MAX_RESISTANCE)
+      {
+        errorHandler(ERROR_MAX_RESISTANCE_EXCEEDED);
+      }
+      else if (resistance_rms < r_zero)
+      {
+        errorHandler(ERROR_RESISTANCE_LOWER_THAN_RZERO);
+      }
+      else if (temp_measured == 0 && voltage_rms > 0.1*MAX_VOLTAGE_RMS && current_rms > 0.1*MAX_CURRENT_RMS)
+      {
+        errorHandler(ERROR_ZERO_TEMPERATURE);
+      }
+      else if(temp_measured>MAX_TEMPERATURE)
       {
         errorHandler(ERROR_MAX_TEMPERATURE_EXCEEDED);
       }
@@ -584,7 +637,7 @@ void loop() {
     temp_pot=(analogRead(ANALOGpin_pot)*MAX_TEMPERATURE)>>ADC_RESOLUTION;
     if(abs(temp_pot-temp_sealing)>=POT_HYSTERESIS) /* Only change sealing temp if new temp is > hysteresis */
     {
-      temp_sealing=temp_pot;
+      //temp_sealing=temp_pot;
     }
 
     controlTemp(temp_setpoint);

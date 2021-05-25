@@ -5,7 +5,7 @@
 #include "error_handler.h"
 #include "config.h"
 #include <EEPROM.h>
-#include "EEPROM_addresses.h"
+#include "EEPROM_utils.h"
 #include <NativeEthernet.h>
 
 #define DISPLAY_BAUDRATE 115200
@@ -16,11 +16,12 @@
 
 volatile uint32_t current_page = 0;
 volatile uint8_t network_state = 0;
-volatile uint8_t allow_return = 1;
 volatile char* local_IP={0};
 volatile char* local_linkstatus={0};
+static volatile int16_t error_count = 1; 
 
-char buffer[100] = {0};
+char buffer[30] = {0};
+char error_log[500] = {0};
 
 /*Home page*/
 NexPage page_home = NexPage(1, 0, "Home");  // Page added as a touch event
@@ -30,7 +31,8 @@ NexPage page_param = NexPage(2, 0, "Parameter");  // Page added as a touch event
 NexButton btn_validate = NexButton(2, 8, "b1");  // Button added
 NexNumber num_preheat = NexNumber(2, 2, "n0"); // Text box added, so we can read it
 NexNumber num_sealing = NexNumber(2, 6, "n1"); // Text box added, so we can read it
-/*Missing the cal. number boxes*/
+NexNumber num_tempcoef = NexNumber(2, 27, "x0"); // Text box added, so we can read it
+NexNumber num_r_zero = NexNumber(2, 28, "x1"); // Text box added, so we can read it
 
 /*Graph1 page*/
 NexPage page_graph1 = NexPage(3, 0, "Graph1");  // Page added as a touch event
@@ -57,12 +59,26 @@ NexPage page_error = NexPage(8, 0, "Error");  // Page added as a touch event
 NexPage page_network = NexPage(9, 0, "Network");  // Page added as a touch event
 NexButton btn_netonoff = NexButton(9, 3, "onoff");  // Button added
 NexNumber num_port = NexNumber(9, 5, "portval"); // Text box added, so we can read it
-NexText staticip = NexText(9, 17, "staticipval");  // Text box added, so we can read it
+NexText txt_static_ip = NexText(9, 17, "txt_static_ipval");  // Text box added, so we can read it
+
+/*PID page*/
+NexPage page_pid = NexPage(16, 0, "PID");  // Page added as a touch event
+NexButton btn_valpid = NexButton(10, 6, "valpid");  // Button added
+NexNumber num_KP = NexNumber(16, 25, "x0"); // Text box added, so we can read it
+NexNumber num_KI = NexNumber(16, 26, "x1"); // Text box added, so we can read it
+NexNumber num_KD = NexNumber(16, 27, "x2"); // Text box added, so we can read it
+NexNumber num_IntegralLim = NexNumber(16, 28, "n0"); // Text box added, so we can read it
+
+/*Log page*/
+NexPage page_log = NexPage(17, 0, "Log");  // Page added as a touch event
+NexButton btn_clear = NexButton(11, 4, "clear");  // Button added
 
 NexTouch *nex_listen_list[] = 
 {
   &btn_validate,  // Button added
   &btn_netonoff,
+  &btn_valpid,
+  &btn_clear,
   &page_home,
   &page_param,
   &page_graph1,
@@ -72,6 +88,8 @@ NexTouch *nex_listen_list[] =
   &page_help,
   &page_error,
   &page_network,
+  &page_pid,
+  &page_log,
   NULL  // String terminated
 };  // End of touch event list
 
@@ -83,6 +101,29 @@ void terminateMessage();
 
 /*Object Callbacks*/
 
+void btn_validate_PopCallback(void *ptr)
+{
+  uint32_t local_preheat=0;
+  uint32_t local_sealing=0;
+  uint32_t local_temp_coef=0;
+  uint32_t local_r_zero=0;
+
+  num_preheat.getValue(&local_preheat);
+  num_sealing.getValue(&local_sealing);
+  num_tempcoef.getValue(&local_temp_coef);
+  num_r_zero.getValue(&local_r_zero);
+
+  writeInt32ToEEPROM(ADDR_TEMP_PREHEAT, local_preheat);
+  writeInt32ToEEPROM(ADDR_TEMP_SEALING, local_sealing);
+  writeInt32ToEEPROM(ADDR_TEMP_COEF, local_temp_coef);
+  writeInt16ToEEPROM(ADDR_R_ZERO,local_r_zero);
+
+  temp_preheat=local_preheat;
+  temp_sealing=local_sealing;
+  temp_coef=(float)local_temp_coef/NUMBOX_TEMP_COEF;
+  r_zero=(float)local_r_zero/NUMBOX_R_ZERO;
+}
+
 void btn_netonoff_PopCallback(void *ptr)
 {
   uint32_t local_port;
@@ -90,12 +131,12 @@ void btn_netonoff_PopCallback(void *ptr)
   if(network_state == 0)
   { 
     memset(buffer, 0, sizeof(buffer)); /* Clear buffer for IP */
-    staticip.getText(buffer, sizeof(buffer)); /* Get IP string from textbox */
+    txt_static_ip.getText(buffer, sizeof(buffer)); /* Get IP string from textbox */
     strcat(buffer,"\0");
 
-    if(setIP(buffer)==ERROR_INVALID_IP);
+    if(setIP(buffer)!=0)
     {
-       Serial1.print("staticipval.txt=\"IP Inválido\"");
+       Serial1.print("txt_static_ipval.txt=\"IP Inválido\"");
        terminateMessage();
     }
 
@@ -128,16 +169,33 @@ void btn_netonoff_PopCallback(void *ptr)
   }
 }
 
-void btn_validate_PopCallback(void *ptr)
+void btn_valpid_PopCallback(void *ptr)
 {
-  uint32_t local_preheat=0;
-  uint32_t local_sealing=0;
-  num_preheat.getValue(&local_preheat);
-  num_sealing.getValue(&local_sealing);
+  uint32_t local_pid_kp=0;
+  uint32_t local_pid_ki=0;  
+  uint32_t local_pid_kd=0;
+  uint32_t local_pid_int_limit=0;
 
-  temp_preheat=local_preheat;
-  temp_sealing=local_sealing;
+  num_KP.getValue(&local_pid_kp);
+  num_KI.getValue(&local_pid_ki);  
+  num_KD.getValue(&local_pid_kd);
+  num_IntegralLim.getValue(&local_pid_int_limit);
 
+  writeInt32ToEEPROM(ADDR_PID_KP, local_pid_kp);
+  writeInt32ToEEPROM(ADDR_PID_KI, local_pid_ki);
+  writeInt32ToEEPROM(ADDR_PID_KD, local_pid_kd);
+  writeInt32ToEEPROM(ADDR_PID_INT_LIM, local_pid_int_limit);
+
+  pid_kp=(float)local_pid_kp/NUMBOX_PID_K;
+  pid_ki=(float)local_pid_ki/NUMBOX_PID_K;
+  pid_kd=(float)local_pid_kd/NUMBOX_PID_K;
+  pid_int_limit=local_pid_int_limit;
+}
+
+void btn_clear_PopCallback(void *ptr)
+{
+  memset(error_log, 0, sizeof(error_log)); /* Clear buffer for error log */
+  error_count=1;
 }
 
 /*Page change Callbacks*/
@@ -156,56 +214,100 @@ void ParamPagePushCallback(void *ptr)
   Serial1.print("n1.val=");
   Serial1.print(temp_sealing);
   terminateMessage();
+
+  Serial1.print("x0.val=");
+  Serial1.print((int)(temp_coef*NUMBOX_TEMP_COEF));
+  terminateMessage();
+
+  Serial1.print("x1.val=");
+  Serial1.print((int)(r_zero*NUMBOX_R_ZERO));
+  terminateMessage();
 }
 
 void Graph1PagePushCallback(void *ptr)
 {
   current_page = pg_GRAPH1; 
+  Serial.println(current_page);
 }
 
 void Graph2PagePushCallback(void *ptr)
 {
   current_page = pg_GRAPH2;
+  Serial.println(current_page);
 } 
 
 void Graph3PagePushCallback(void *ptr)
 {
   current_page = pg_GRAPH3;
+  Serial.println(current_page);
 }
 
 void InfoPagePushCallback(void *ptr)
 {
   current_page = pg_INFO;
+  Serial.println(current_page);
 }
 
 void HelpPagePushCallback(void *ptr)
 {
   current_page = pg_HELP;
+  Serial.println(current_page);
 }
 
 void ErrorPagePushCallback(void *ptr)
 {
   current_page = pg_ERROR;
+  Serial.println(current_page);
 }
 
 void NetworkPagePushCallback(void *ptr)
 {
-  EEPROM.get(ADDRESS_NETWORK_PORT, network_port);
   current_page = pg_NETWORK;
-  Serial1.print("n0.val=");
+
+  Serial1.print("portval.val=");
   Serial1.print(network_port);
   terminateMessage();
 
-  Serial1.print("staticipval.txt=\"");
+  Serial1.print("txt_static_ipval.txt=\"");
   for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
   {
-    EEPROM.get(ADDRESS_STATIC_IP+i, static_ip_arr[i]);
     Serial1.print(static_ip_arr[i]);
     if (i < (IP_ARRAY_SIZE -1)) 
     {
       Serial1.print(".");
     }
   }
+  Serial1.print("\"");
+  terminateMessage();
+}
+
+void PIDPagePushCallback(void *ptr)
+{
+  current_page = pg_PID;
+
+  Serial1.print("x0.val=");
+  Serial1.print((int)(pid_kp*NUMBOX_PID_K));
+  terminateMessage();
+
+  Serial1.print("x1.val=");
+  Serial1.print((int)(pid_ki*NUMBOX_PID_K));
+  terminateMessage();
+
+  Serial1.print("x2.val=");
+  Serial1.print((int)(pid_kd*NUMBOX_PID_K));
+  terminateMessage();
+
+  Serial1.print("n0.val=");
+  Serial1.print(pid_int_limit);
+  terminateMessage();
+}
+
+void LogPagePushCallback(void *ptr)
+{;
+  current_page = pg_PID;
+  Serial1.print("log.txt=");
+  Serial1.print("\"");
+  Serial1.print(error_log);
   Serial1.print("\"");
   terminateMessage();
 }
@@ -218,6 +320,8 @@ void InitDisplay() {
   /*Attach callback functions to objects*/
   btn_validate.attachPop(btn_validate_PopCallback);
   btn_netonoff.attachPop(btn_netonoff_PopCallback);
+  btn_valpid.attachPop(btn_valpid_PopCallback);
+  btn_clear.attachPop(btn_clear_PopCallback);
   page_home.attachPush(HomePagePushCallback);
   page_param.attachPush(ParamPagePushCallback);
   page_graph1.attachPush(Graph1PagePushCallback);
@@ -227,6 +331,10 @@ void InitDisplay() {
   page_help.attachPush(HelpPagePushCallback);
   page_error.attachPush(ErrorPagePushCallback);
   page_network.attachPush(NetworkPagePushCallback);
+  page_pid.attachPush(PIDPagePushCallback);
+  page_log.attachPush(LogPagePushCallback);
+
+  memset(error_log, 0, sizeof(error_log)); /* Clear buffer for error log */
 
   /*Force reset*/
   resetDisplay();
@@ -357,25 +465,24 @@ void updateDisplay(int state, int input_start, int input_preheat, int input_seal
   }
 }
 
-void errorPage(int8_t error_code)
+void errorPage(int16_t error_code)
 {
-  Serial1.print("page Error");
-  terminateMessage();
-
-  switch(error_code){
-    case ERROR_MAX_TEMPERATURE_EXCEEDED:
-    Serial1.print("t1.txt=\"MAX TEMPERATURE EXCEEDED\"");
-    break;
-
-    case ERROR_MAX_VOLTAGE_EXCEEDED:
-    Serial1.print("t1.txt=\"MAX VOLTAGE EXCEEDED\"");
-    break;
-
-    case ERROR_MAX_CURRENT_EXCEEDED:
-    Serial1.print("t1.txt=\"MAX CURRENT EXCEEDED\"");
-    break;
+  static int16_t last_error = 0;
+  if(last_error != error_code)
+  {
+    char error_code_str[ERROR_CODE_SIZE]={0};
+    sprintf(error_code_str, "%02d: %d; ", error_count, error_code);
+    strcat(error_log, error_code_str);
+    if(error_count%5==0)
+    {
+      strcat(error_log, "\r\n");
+    }
+    last_error=error_code;
+    error_count++;
   }
-  terminateMessage();
+
+  //Serial1.print("page Error");
+  //terminateMessage();
 }
 
 void resetDisplay()

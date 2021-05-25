@@ -1,16 +1,21 @@
 #ifndef DISPLAYDRIVER_H
 #define DISPLAYDRIVER_H
 
-
 #include <Nextion.h> 
 #include "ethernet.h"
 
-extern volatile uint16_t network_port;
 extern volatile uint32_t temp_sealing;
 extern volatile uint32_t temp_preheat;
 extern volatile uint32_t temp_measured;
 extern volatile float current_rms;
 extern volatile float voltage_rms;
+extern volatile float pid_kp;
+extern volatile float pid_ki;
+extern volatile float pid_kd;
+extern volatile uint32_t pid_int_limit;
+extern volatile float temp_coef;
+extern volatile float r_zero;
+extern volatile uint16_t network_port;
 extern volatile uint8_t static_ip_arr[IP_ARRAY_SIZE];
 
 enum Page {
@@ -23,7 +28,9 @@ enum Page {
 	pg_INFO,
 	pg_HELP,
 	pg_ERROR,
-	pg_NETWORK
+	pg_NETWORK,
+   pg_PID,
+   pg_Log
 };
 
 /********************************************************************
@@ -89,7 +96,7 @@ void eventCheck();
    Note:     
 
  ********************************************************************/
-void errorPage(int8_t error_code);
+void errorPage(int16_t error_code);
 
 
 /********************************************************************

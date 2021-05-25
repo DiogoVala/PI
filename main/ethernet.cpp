@@ -3,9 +3,9 @@
 #include "ethernet.h"
 #include "ethernetAPI.h"
 #include <EEPROM.h>
-#include "EEPROM_addresses.h"
+#include "EEPROM_utils.h"
 
-volatile uint16_t network_port;
+volatile uint16_t network_port=80;
 
 // Enter a MAC address for your controller below.
 byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
@@ -58,18 +58,16 @@ int read_temp(){
   return temp_measured;
 }
 
-float read_voltage(){
-  return voltage_rms;
+int read_voltage(){
+  return (int)voltage_rms/100;
 }
 
-float read_current(){
-  return current_rms;
+int read_current(){
+  return (int)current_rms/100;
 }
 
 int8_t InitEthernet()
 {
-  EEPROM.get(ADDRESS_NETWORK_PORT, network_port);
-
   server = EthernetServer(network_port);
 
   // Function to be exposed
@@ -106,11 +104,13 @@ int8_t setNetPort(uint32_t port) {
   if(port > UINT16_MAX)
   {
     error_code = ERROR_INVALID_NETWORK_PORT;
+    Serial.println("Here");
   }
   else
   {
+    Serial.println("Here1");
     network_port=port;
-    EEPROM.put(ADDRESS_NETWORK_PORT, network_port);
+    writeInt16ToEEPROM(ADDR_NETWORK_PORT, (uint16_t)network_port);
   }
   return error_code;
 }
@@ -146,7 +146,7 @@ int8_t setIP(const char* ip) {
       strToIP(ip);
       for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
       {
-        EEPROM.put(ADDRESS_STATIC_IP+i, static_ip_arr[i]);
+        writeInt8ToEEPROM(ADDR_STATIC_IP+i, static_ip_arr[i]);
       }
     }
   return error_code;

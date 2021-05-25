@@ -33,12 +33,6 @@
 #define MAX_DUTY_CYCLE 4095 /* Change according to PWM_RESOLUTION*/
 #define MIN_DUTY_CYCLE 0
 
-/*Control*/
-#define PID_KP 5
-#define PID_KI 10
-#define PID_KD 1000
-#define INTEGRAL_CLAMP 10
-
 /*Main timekeeping period*/
 #define PERIOD_MAIN 100
 
@@ -58,13 +52,18 @@
 #define TEMP_COEF 0.001F /* Example of temperature coefficient */
 #define R_ZERO 1.01F /* Resistance of heatband at reference temperature */
 #define T_ZERO 20 /* Reference temperature */
-#define SAMPLES_PER_PERIOD 200 /*(PERIOD_SAMPLING*PERIOD_MAIN)/PERIOD_230V */ 
 
 /*Limits*/
 #define MAX_TEMPERATURE 300 /* Temperature limit before system error*/
 #define MAX_PREHEAT 300 /* Maximum preheat temperatura value*/
 #define MAX_SEALING 300 /* Maximum sealing temperatura value*/
-#define MAX_VOLTAGE_RMS 5000 /* Maximum RMS voltage *100 */
-#define MAX_CURRENT_RMS 4000 /* Maximum RMS current *100 */
+#define MAX_VOLTAGE_RMS 7000 /* Maximum RMS voltage *100 */
+#define MAX_CURRENT_RMS 5000 /* Maximum RMS current *100 */
+#define MAX_RESISTANCE 2 /* Maximum resistance value for heatband*/
 #define MIN_SENSOR_VAL 50 /* Ignore sensor current/voltage < X */
 #define POT_HYSTERESIS 5 /* Temperature hysteresis - Only update sealing if new pot temp is above this*/
+
+/*Display*/
+#define NUMBOX_PID_K 10000 /* constant to transform between float and int*/
+#define NUMBOX_TEMP_COEF 100000 /* constant to transform between float and int*/
+#define NUMBOX_R_ZERO 100/* constant to transform between float and int*/
