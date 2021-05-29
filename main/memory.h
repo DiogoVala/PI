@@ -1,7 +1,17 @@
-#ifndef EEPROM_ADDRESSES_H
-#define EEPROM_ADDRESSES_H
+/*
+   File:   memory.h
+   Author: Diogo Vala
+
+   Overview: EEPROM memory management
+*/
+
+#ifndef MEMORY_H
+#define MEMORY_H
 
 #include <stdint.h>
+#include "errors.h"
+#include "ethernet.h"
+#include "display.h"
 
 /*
 	EEPROM Memory Map
@@ -61,6 +71,19 @@
 #define ADDR_ERROR_COUNT 36
 #define ADDR_ERROR_LOG 38
 
+/* Variable stored in memory */ 
+extern volatile uint32_t temp_sealing;
+extern volatile uint32_t temp_preheat;
+extern volatile float temp_coef;
+extern volatile float r_zero;
+extern volatile float pid_kp;
+extern volatile float pid_ki;
+extern volatile float pid_kd;
+extern volatile uint32_t pid_int_limit;
+extern volatile uint16_t network_port;
+extern volatile uint8_t static_ip_arr[IP_ARRAY_SIZE];
+extern volatile uint16_t error_count;
+extern volatile uint8_t error_log[ERROR_LOG_SIZE];
 
 void writeInt8ToEEPROM(uint16_t addr, uint8_t value);
 
@@ -79,5 +102,7 @@ uint16_t readInt16FromEEPROM(uint16_t addr);
 
 uint32_t readInt32FromEEPROM(uint16_t addr);
 
+
+void loadMemory();
 
 #endif

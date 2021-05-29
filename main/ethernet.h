@@ -1,16 +1,26 @@
+/*
+   File:   ethernet.h
+   Author: Diogo Vala
+
+   Overview: Ethernet management and API 
+*/
+
 #ifndef ETHERNET_H
 #define ETHERNET_H
 
-#include "error_handler.h"
+#include "errors.h"
 
-#define IP_ARRAY_SIZE 4
-#define IP_LENGTH 15
+#define MAX_HTML_LOG_SIZE 200 /* Maximum number of error codes to show */
+#define IP_ARRAY_SIZE 4 /* 111.222.333.444 - 4 numbers to store */
+#define IP_LENGTH 15 /* Max length of IP string*/
 
+/* Error codes */
 #define ETHERNET_ONLINE 0
 #define ETHERNET_OFFLINE -1
 #define ERROR_INVALID_IP -2
 #define ERROR_INVALID_NETWORK_PORT -3
 
+/* Variables available on the API */
 extern volatile uint32_t temp_sealing;
 extern volatile uint32_t temp_preheat;
 extern volatile uint32_t temp_measured;
@@ -18,7 +28,7 @@ extern volatile float current_rms;
 extern volatile float voltage_rms;
 extern volatile uint16_t error_count;
 extern volatile uint8_t error_log[ERROR_LOG_SIZE];
-
+extern volatile bool flag_pot;
 
 /********************************************************************
    Function:    InitEthernet()
@@ -33,7 +43,7 @@ extern volatile uint8_t error_log[ERROR_LOG_SIZE];
    Note:     Uses port 0 as default port
 
  ********************************************************************/
-int8_t InitEthernet();
+void InitEthernet();
 
 
 /********************************************************************
@@ -44,15 +54,44 @@ int8_t InitEthernet();
 
    Side Effects:
 
-   Overview:    checks ethernet status
+   Overview:    Checks ethernet status
 
    Note:     
 
  ********************************************************************/
 int8_t linkStatus();
 
+
+/********************************************************************
+   Function:    setNetPort()
+   Precondition: 
+   Input:      network port (0 - 65535)
+   Returns:    ERROR_INVALID_NETWORK_PORT / 0
+
+   Side Effects:
+
+   Overview:    Set network port
+
+   Note:     
+
+ ********************************************************************/
 int8_t setNetPort(uint32_t port);
 
+
+/********************************************************************
+   Function:    setIP()
+   Precondition: 
+   Input:      ip string in the format "nnn.nnn.nnn.nnn"
+               where nnn is (0-255)
+   Returns:    ERROR_INVALID_IP / 0
+
+   Side Effects:
+
+   Overview:    Set network port
+
+   Note:     
+
+ ********************************************************************/
 int8_t setIP(const char* ip);
 
 
@@ -60,16 +99,16 @@ int8_t setIP(const char* ip);
    Function:    getIP()
    Precondition: Ethernet module must be initialized
    Input:      
-   Returns:		string with IP
+   Returns:		
 
    Side Effects:
 
-   Overview:    gets current local IP
+   Overview:    prints IP string to display
 
-   Note:     
+   Note:     Not the best solution
 
  ********************************************************************/
-const char* getIP();
+void getIP();
 
 
 /********************************************************************

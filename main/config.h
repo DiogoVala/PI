@@ -1,8 +1,14 @@
+/*
+   File:   config.h
+   Author: Diogo Vala
+
+   Overview: Constants for system operation
+*/
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
-#define ANALOGpin_current 15
-#define ANALOGpin_voltage 16
+#define ANALOGpin_current 16
+#define ANALOGpin_voltage 15
 
 /**** Digital Pins ****/
 /*PLC Signals*/
@@ -47,11 +53,9 @@
 /*Sensors*/
 #define CURRENT_M 2.59973 /* Linearization slope */
 #define CURRENT_B 5321 /* Linearization constant */
-#define VOLTAGE_M 3.64798F /* Linearization slope */
+#define VOLTAGE_M 3.64798 /* Linearization slope */
 #define VOLTAGE_B 7466 /* Linearization constant */
-#define TEMP_COEF 0.001F /* Example of temperature coefficient */
-#define R_ZERO 1.01F /* Resistance of heatband at reference temperature */
-#define T_ZERO 20 /* Reference temperature */
+#define T_ZERO 20 /* Ambient temperature */
 
 /*Limits*/
 #define MAX_TEMPERATURE 300 /* Temperature limit before system error*/
@@ -59,11 +63,8 @@
 #define MAX_SEALING 300 /* Maximum sealing temperatura value*/
 #define MAX_VOLTAGE_RMS 7000 /* Maximum RMS voltage *100 */
 #define MAX_CURRENT_RMS 5000 /* Maximum RMS current *100 */
+#define MIN_VOLTAGE_RMS 101 /* Maximum RMS voltage *100 */
+#define MIN_CURRENT_RMS 100 /* Maximum RMS current *100 */
 #define MAX_RESISTANCE 2 /* Maximum resistance value for heatband*/
 #define MIN_SENSOR_VAL 50 /* Ignore sensor current/voltage < X */
 #define POT_HYSTERESIS 5 /* Temperature hysteresis - Only update sealing if new pot temp is above this*/
-
-/*Display*/
-#define NUMBOX_PID_K 10000 /* constant to transform between float and int*/
-#define NUMBOX_TEMP_COEF 100000 /* constant to transform between float and int*/
-#define NUMBOX_R_ZERO 100/* constant to transform between float and int*/

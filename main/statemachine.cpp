@@ -1,5 +1,5 @@
 /*
-   File:   statemachine.c
+   File:   statemachine.cpp
    Author: Diogo Vala & Diogo Fernandes
 
    Overview: Define state machines

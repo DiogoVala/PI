@@ -1,27 +1,21 @@
-#include "DisplayDriver.h"
-#include <string.h>
+/*
+   File:   display.cpp
+   Author: Diogo Vala
+
+   Overview: Display control and interaction
+*/
+
+#include "display.h"
 #include "ethernet.h"
 #include "statemachine.h"
-#include "error_handler.h"
+#include "errors.h"
 #include "config.h"
-#include <EEPROM.h>
-#include "EEPROM_utils.h"
-#include <NativeEthernet.h>
-#include "error_handler.h"
-
-#define DISPLAY_BAUDRATE 115200
-#define GRAPH_Y_RESOLUTION 160
-#define GRAPH_MAX_TEMPERATURE 320
-#define GRAPH_MAX_VOLTAGE 50
-#define GRAPH_MAX_CURRENT 50
-#define MAX_LOG_DISPLAY_SIZE 65
+#include "memory.h"
 
 volatile uint32_t current_page = 0;
 volatile uint8_t network_state = 0;
-volatile char* local_IP={0};
-volatile char* local_linkstatus={0};
 
-char buffer[30] = {0};
+char buffer[50] = {0};
 
 /*Home page*/
 NexPage page_home = NexPage(1, 0, "Home");  // Page added as a touch event
@@ -103,6 +97,7 @@ void terminateMessage();
 
 void btn_validate_PopCallback(void *ptr)
 {
+	flag_pot=false; /*Disallow potenciometer*/
 	uint32_t local_preheat=0;
 	uint32_t local_sealing=0;
 	uint32_t local_temp_coef=0;
@@ -135,8 +130,6 @@ void btn_netonoff_PopCallback(void *ptr)
 		txt_static_ip.getText(buffer, sizeof(buffer)); /* Get IP string from textbox */
 		strcat(buffer,"\0");
 
-		Serial.println(buffer);
-
 		if(setIP(buffer)!=0)
 		{
 			valid_config=false;
@@ -153,12 +146,9 @@ void btn_netonoff_PopCallback(void *ptr)
 			terminateMessage();
 		}
 
-		Serial.println(local_port);
 		Serial1.print("portval.val=");
 		Serial1.print(local_port);
 		terminateMessage();
-
-		
 
 		if(valid_config)
 		{
@@ -174,7 +164,6 @@ void btn_netonoff_PopCallback(void *ptr)
 			Serial1.print("t3.txt=\"Configuração inválida\"");
 			terminateMessage();
 		}
-
 	}
 	else
 	{
@@ -503,8 +492,10 @@ void updateDisplay(int state, int input_start, int input_preheat, int input_seal
 	}
 }
 
-void errorPage(int16_t error_code)
+void errorPage()
 {
+	Serial1.print("code_c");
+	terminateMessage();
 	Serial1.print("page Error");
 	terminateMessage();
 }

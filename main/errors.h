@@ -1,8 +1,8 @@
 /*
-   File:   statemachine.h
-   Author: Diogo Vala & Diogo Fernandes
+   File:  errors.h
+   Author: Diogo Vala
 
-   Overview: Error codes
+   Overview: Error codes for main system
 */
 
 #ifndef ERROR_HANDLER_H

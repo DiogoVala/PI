@@ -1,10 +1,28 @@
+/*
+   File:   display.h
+   Author: Diogo Vala
+
+   Overview: Display control and interaction
+*/
+
 #ifndef DISPLAYDRIVER_H
 #define DISPLAYDRIVER_H
 
 #include <Nextion.h> 
 #include "ethernet.h"
-#include "error_handler.h"
+#include "errors.h"
 
+#define DISPLAY_BAUDRATE 115200
+#define GRAPH_Y_RESOLUTION 160
+#define GRAPH_MAX_TEMPERATURE 320
+#define GRAPH_MAX_VOLTAGE 50
+#define GRAPH_MAX_CURRENT 50
+#define MAX_LOG_DISPLAY_SIZE 65
+#define NUMBOX_PID_K 10000 /* constant to transform between float and int*/
+#define NUMBOX_TEMP_COEF 100000 /* constant to transform between float and int*/
+#define NUMBOX_R_ZERO 100/* constant to transform between float and int*/
+
+/* Variables avaiable on the display */
 extern volatile uint32_t temp_sealing;
 extern volatile uint32_t temp_preheat;
 extern volatile uint32_t temp_measured;
@@ -20,6 +38,7 @@ extern volatile uint16_t network_port;
 extern volatile uint8_t static_ip_arr[IP_ARRAY_SIZE];
 extern volatile uint16_t error_count;
 extern volatile uint8_t error_log[ERROR_LOG_SIZE];
+extern volatile bool flag_pot;
 
 enum Page {
 	pg_START,
@@ -99,7 +118,7 @@ void eventCheck();
    Note:     
 
  ********************************************************************/
-void errorPage(int16_t error_code);
+void errorPage();
 
 
 /********************************************************************

@@ -1,30 +1,30 @@
+/*
+   File:   ethernet.cpp
+   Author: Diogo Vala
+
+   Overview: Ethernet management and API 
+*/
+
 #include <NativeEthernet.h>
-#include "config.h"
 #include "ethernet.h"
 #include "ethernetAPI.h"
-#include <EEPROM.h>
-#include "EEPROM_utils.h"
+#include "config.h"
+#include "memory.h"
 
 volatile uint16_t network_port=80;
-
-// Enter a MAC address for your controller below.
-byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
-
 volatile uint8_t static_ip_arr[IP_ARRAY_SIZE] = {0};
 
-// IP address in case DHCP fails
+byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x40 };
+
 IPAddress static_ip;
 
-// Ethernet server
 EthernetServer server(0);
 
-//Ethernet client
 EthernetClient client;
 
-// Create aREST instance
-aREST rest = aREST();
+aREST rest = aREST(); /* Create aREST instance */
 
-// Custom functions accessible by the API
+/* Custom functions accessible by the API */
 void set_temp_seal(String setpoint) {
   uint32_t local_sealing = setpoint.toInt();
   if(local_sealing<0)
@@ -39,6 +39,7 @@ void set_temp_seal(String setpoint) {
   {
     temp_sealing=local_sealing;
   }
+  flag_pot=false; /*Disallow potenciometer*/
 }
 
 void set_temp_preheat(String preheat) {
@@ -57,7 +58,7 @@ void set_temp_preheat(String preheat) {
   }
 }
 
-int read_temp(){
+int read_temp() {
   return temp_measured;
 }
 
@@ -70,40 +71,58 @@ int read_current(){
 }
 
 int print_log(){
-  char buffer[10000];
-  char intbuf[10];
-  memset(buffer, 0, sizeof(buffer)); /* Clear buffer for IP */
-  memset(intbuf, 0, sizeof(intbuf)); /* Clear buffer for IP */
 
-  for(uint16_t i = 0; i<error_count; i++)
+  char intbuf[10]; /* Small buffer to store error code ( "nnn:err;" ) */
+  memset(intbuf, 0, sizeof(intbuf));
+
+  int16_t starting_idx=error_count-MAX_HTML_LOG_SIZE; /* Start from index that allows the most recent MAX_HTML_LOG_SIZE samples to be displayed */
+  int16_t ending_idx;
+  if(starting_idx<0) 
+  {
+    starting_idx=0;
+  }
+  if(error_count<MAX_HTML_LOG_SIZE)
+  {
+    ending_idx=error_count;
+  }
+  else
+  {
+    ending_idx=starting_idx+MAX_HTML_LOG_SIZE;
+  }
+
+  client.print("Error log: \n");
+  for (int16_t i=starting_idx; i<ending_idx; i++)
   {
     snprintf(intbuf, sizeof(intbuf), "%d:%d; ", i+1, error_log[i]);
-    strcat(buffer, intbuf);
-  } 
-  client.print("Error log: \n");
-  client.println(buffer);
+    client.print(intbuf); /* Print error codes to local server */
+  }
+}
+
+int clear_log(){
+  error_count=0;
+  writeInt16ToEEPROM(ADDR_ERROR_COUNT, error_count);
 }
 
 
-int8_t InitEthernet()
+void InitEthernet()
 {
   server = EthernetServer(network_port);
 
-  // Function to be exposed
+  /* Funcions available on the API */
   rest.function("set_seal",set_temp_seal);
   rest.function("set_preheat",set_temp_preheat);
   rest.function("read_temp",read_temp);
   rest.function("read_voltage",read_voltage);
   rest.function("read_current",read_current);
   rest.function("log",print_log);
+  rest.function("clrlog",clear_log);
 
-  // Give name & ID to the device (ID should be 6 characters long)
+  /* Device identification */
   rest.set_id("0001");
   rest.set_name("Termorregulador");
 
-  Serial.println(static_ip);
-  Ethernet.begin(mac, static_ip); /* Connect using static IP */
-
+  /* Start server using static IP */
+  Ethernet.begin(mac, static_ip); 
 }
 
 int8_t linkStatus(){
@@ -115,8 +134,8 @@ int8_t linkStatus(){
   }
 }
 
-const char* getIP(){
-  Serial1.print(Ethernet.localIP());
+void getIP(){
+  Serial1.print(Ethernet.localIP()); /* Print directly to display - Not the best solution. */
 }
 
 int8_t setNetPort(uint32_t port) {
@@ -171,7 +190,7 @@ int8_t setIP(const char* ip) {
 }
 
 void stopEthernet(){
-  server = EthernetServer(0);
+  server = EthernetServer(0); /* Only solution to stopping the server. Doesn't allow new connection.*/
 }
 
 void ListenClient(){
