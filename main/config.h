@@ -21,7 +21,6 @@
 /*Control signals*/
 #define CTRLpin_PWM 8
 #define CTRLpin_OnOff 9
-#define CTRLpin_zerocross 10
 
 /*General defs*/
 #define LOW 0
@@ -56,6 +55,7 @@
 #define VOLTAGE_M 3.64798 /* Linearization slope */
 #define VOLTAGE_B 7466 /* Linearization constant */
 #define T_ZERO 20 /* Ambient temperature */
+#define MAX_CALIBRATION_VALUE 250 /* System will not calibrate if sensor value is at no load is larger than this*/
 
 /*Limits*/
 #define MAX_TEMPERATURE 300 /* Temperature limit before system error*/

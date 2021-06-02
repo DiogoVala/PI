@@ -1,6 +1,6 @@
 /*
    File:   ethernet.cpp
-   Author: Diogo Vala
+   Author: Diogo Vala & Diogo Fernandes
 
    Overview: Ethernet management and API 
 */
@@ -25,7 +25,7 @@ EthernetClient client;
 aREST rest = aREST(); /* Create aREST instance */
 
 /* Custom functions accessible by the API */
-void set_temp_seal(String setpoint) {
+int set_temp_seal(String setpoint) {
   uint32_t local_sealing = setpoint.toInt();
   if(local_sealing<0)
   {
@@ -39,10 +39,12 @@ void set_temp_seal(String setpoint) {
   {
     temp_sealing=local_sealing;
   }
+  writeInt32ToEEPROM(ADDR_TEMP_SEALING, temp_sealing);
   flag_pot=false; /*Disallow potenciometer*/
+  return temp_sealing;
 }
 
-void set_temp_preheat(String preheat) {
+int set_temp_preheat(String preheat) {
   uint32_t local_preheat = preheat.toInt();
   if(local_preheat<0)
   {
@@ -56,6 +58,8 @@ void set_temp_preheat(String preheat) {
   {
     temp_preheat=local_preheat;
   }
+  writeInt32ToEEPROM(ADDR_TEMP_PREHEAT, temp_preheat);
+  return temp_preheat;
 }
 
 int read_temp() {
@@ -72,8 +76,7 @@ int read_current(){
 
 int print_log(){
 
-  char intbuf[10]; /* Small buffer to store error code ( "nnn:err;" ) */
-  memset(intbuf, 0, sizeof(intbuf));
+  char intbuf[10] = {0}; /* Small buffer to store error code ( "nnn:err;" ) */
 
   int16_t starting_idx=error_count-MAX_HTML_LOG_SIZE; /* Start from index that allows the most recent MAX_HTML_LOG_SIZE samples to be displayed */
   int16_t ending_idx;
@@ -96,11 +99,12 @@ int print_log(){
     snprintf(intbuf, sizeof(intbuf), "%d:%d; ", i+1, error_log[i]);
     client.print(intbuf); /* Print error codes to local server */
   }
+  return 0;
 }
-
-int clear_log(){
+static int clear_log(){
   error_count=0;
   writeInt16ToEEPROM(ADDR_ERROR_COUNT, error_count);
+  return 0;
 }
 
 
@@ -121,6 +125,11 @@ void InitEthernet()
   rest.set_id("0001");
   rest.set_name("Termorregulador");
 
+  for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
+  {
+    static_ip[i]=static_ip_arr[i];
+    Serial.println(static_ip[i]);
+  }
   /* Start server using static IP */
   Ethernet.begin(mac, static_ip); 
 }
@@ -156,18 +165,24 @@ int8_t setNetPort(uint32_t port) {
 void strToIP(const char * str) {
 
   uint8_t j=0;
-  static_ip_arr[j]=0;
 
+  for(int i=0; i<IP_ARRAY_SIZE; i++)
+  {
+    static_ip_arr[i]=0;
+  }
   for(int i=0; i<IP_LENGTH; i++)
   {
-    if(str[i]!='.' && str[i]!='\0')
+    if(str[i] >= '0' && str[i] <= '9')
     {
       static_ip_arr[j]=static_ip_arr[j]*10+(int)str[i]-48; /* Save valid digit as integer */
     }
     else
     {
       j++;
-      static_ip_arr[j]=0;
+      if(j==IP_ARRAY_SIZE)
+      {
+       break;
+      }
     }
   }
 }
@@ -184,7 +199,6 @@ int8_t setIP(const char* ip) {
       error_code = ERROR_INVALID_IP;
       break;
     }
-    static_ip[i]=static_ip_arr[i];
   }
   return error_code;
 }

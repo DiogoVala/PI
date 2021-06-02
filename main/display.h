@@ -21,6 +21,7 @@
 #define NUMBOX_PID_K 10000 /* constant to transform between float and int*/
 #define NUMBOX_TEMP_COEF 100000 /* constant to transform between float and int*/
 #define NUMBOX_R_ZERO 100/* constant to transform between float and int*/
+#define WAVEFORM_X_RANGE 260
 
 /* Variables avaiable on the display */
 extern volatile uint32_t temp_sealing;
@@ -39,6 +40,10 @@ extern volatile uint8_t static_ip_arr[IP_ARRAY_SIZE];
 extern volatile uint16_t error_count;
 extern volatile uint8_t error_log[ERROR_LOG_SIZE];
 extern volatile bool flag_pot;
+extern volatile uint32_t temp_measured_buffer[WAVEFORM_X_RANGE];
+extern volatile float current_rms_buffer[WAVEFORM_X_RANGE];
+extern volatile float voltage_rms_buffer[WAVEFORM_X_RANGE];
+extern volatile uint32_t buffer_index;
 
 enum Page {
 	pg_START,
@@ -96,7 +101,7 @@ void updateDisplay(int state, int input_start, int input_preheat, int input_seal
 
    Side Effects:
 
-   Overview:    Checks interrupt flags from display events
+   Overview:    Checks display events and calls associated function
 
    Note:     
 
@@ -112,8 +117,7 @@ void eventCheck();
 
    Side Effects:
 
-   Overview:    Forces error page with error message according
-   				to error code
+   Overview:    Forces error page 
 
    Note:     
 

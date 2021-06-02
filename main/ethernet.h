@@ -12,7 +12,7 @@
 
 #define MAX_HTML_LOG_SIZE 200 /* Maximum number of error codes to show */
 #define IP_ARRAY_SIZE 4 /* 111.222.333.444 - 4 numbers to store */
-#define IP_LENGTH 15 /* Max length of IP string*/
+#define IP_LENGTH 16 /* Max length of IP string*/
 
 /* Error codes */
 #define ETHERNET_ONLINE 0
@@ -29,6 +29,7 @@ extern volatile float voltage_rms;
 extern volatile uint16_t error_count;
 extern volatile uint8_t error_log[ERROR_LOG_SIZE];
 extern volatile bool flag_pot;
+
 
 /********************************************************************
    Function:    InitEthernet()

@@ -18,56 +18,56 @@ volatile uint8_t network_state = 0;
 char buffer[50] = {0};
 
 /*Home page*/
-NexPage page_home = NexPage(1, 0, "Home");  // Page added as a touch event
+static NexPage page_home = NexPage(1, 0, "Home");  // Page added as a touch event
 
 /*Parameter page*/
-NexPage page_param = NexPage(2, 0, "Parameter");  // Page added as a touch event
-NexButton btn_validate = NexButton(2, 8, "b1");  // Button added
-NexNumber num_preheat = NexNumber(2, 2, "n0"); // Text box added, so we can read it
-NexNumber num_sealing = NexNumber(2, 6, "n1"); // Text box added, so we can read it
-NexNumber num_tempcoef = NexNumber(2, 27, "x0"); // Text box added, so we can read it
-NexNumber num_r_zero = NexNumber(2, 28, "x1"); // Text box added, so we can read it
+static NexPage page_param = NexPage(2, 0, "Parameter");  // Page added as a touch event
+static NexButton btn_validate = NexButton(2, 8, "b1");  // Button added
+static NexNumber num_preheat = NexNumber(2, 2, "n0"); // Text box added, so we can read it
+static NexNumber num_sealing = NexNumber(2, 6, "n1"); // Text box added, so we can read it
+static NexNumber num_tempcoef = NexNumber(2, 27, "x0"); // Text box added, so we can read it
+static NexNumber num_r_zero = NexNumber(2, 28, "x1"); // Text box added, so we can read it
 
 /*Graph1 page*/
-NexPage page_graph1 = NexPage(3, 0, "Graph1");  // Page added as a touch event
-NexWaveform graph_temp = NexWaveform(3, 1, "s0");
+static NexPage page_graph1 = NexPage(3, 0, "Graph1");  // Page added as a touch event
+static NexWaveform graph_temp = NexWaveform(3, 1, "s0");
 
 /*Graph2 page*/
-NexPage page_graph2 = NexPage(4, 0, "Graph2");  // Page added as a touch event
-NexWaveform graph_voltage = NexWaveform(4, 4, "s0");
+static NexPage page_graph2 = NexPage(4, 0, "Graph2");  // Page added as a touch event
+static NexWaveform graph_voltage = NexWaveform(4, 4, "s0");
 
 /*Graph3 page*/
-NexPage page_graph3 = NexPage(5, 0, "Graph3");  // Page added as a touch event
-NexWaveform graph_current = NexWaveform(5, 4, "s0");
+static NexPage page_graph3 = NexPage(5, 0, "Graph3");  // Page added as a touch event
+static NexWaveform graph_current = NexWaveform(5, 4, "s0");
 
 /*Info page*/
-NexPage page_info = NexPage(6, 0, "Info");  // Page added as a touch event
+static NexPage page_info = NexPage(6, 0, "Info");  // Page added as a touch event
 
 /*Help page*/
-NexPage page_help = NexPage(7, 0, "Help");  // Page added as a touch event
+static NexPage page_help = NexPage(7, 0, "Help");  // Page added as a touch event
 
 /*Error page*/
-NexPage page_error = NexPage(8, 0, "Error");  // Page added as a touch event
+static NexPage page_error = NexPage(8, 0, "Error");  // Page added as a touch event
 
 /*Network page*/
-NexPage page_network = NexPage(9, 0, "Network");  // Page added as a touch event
-NexButton btn_netonoff = NexButton(9, 3, "onoff");  // Button added
-NexNumber num_port = NexNumber(9, 5, "portval"); // Text box added, so we can read it
-NexText txt_static_ip = NexText(9, 17, "staticipval");  // Text box added, so we can read it
+static NexPage page_network = NexPage(9, 0, "Network");  // Page added as a touch event
+static NexButton btn_netonoff = NexButton(9, 3, "onoff");  // Button added
+static NexNumber num_port = NexNumber(9, 5, "portval"); // Text box added, so we can read it
+static NexText txt_static_ip = NexText(9, 17, "staticipval");  // Text box added, so we can read it
 
 /*PID page*/
-NexPage page_pid = NexPage(16, 0, "PID");  // Page added as a touch event
-NexButton btn_valpid = NexButton(10, 6, "valpid");  // Button added
-NexNumber num_KP = NexNumber(16, 25, "x0"); // Text box added, so we can read it
-NexNumber num_KI = NexNumber(16, 26, "x1"); // Text box added, so we can read it
-NexNumber num_KD = NexNumber(16, 27, "x2"); // Text box added, so we can read it
-NexNumber num_IntegralLim = NexNumber(16, 28, "n0"); // Text box added, so we can read it
+static NexPage page_pid = NexPage(16, 0, "PID");  // Page added as a touch event
+static NexButton btn_valpid = NexButton(10, 6, "valpid");  // Button added
+static NexNumber num_KP = NexNumber(16, 25, "x0"); // Text box added, so we can read it
+static NexNumber num_KI = NexNumber(16, 26, "x1"); // Text box added, so we can read it
+static NexNumber num_KD = NexNumber(16, 27, "x2"); // Text box added, so we can read it
+static NexNumber num_IntegralLim = NexNumber(16, 28, "n0"); // Text box added, so we can read it
 
 /*Log page*/
-NexPage page_log = NexPage(17, 0, "Log");  // Page added as a touch event
-NexButton btn_clear = NexButton(11, 4, "clear");  // Button added
+static NexPage page_log = NexPage(17, 0, "Log");  // Page added as a touch event
+static NexButton btn_clear = NexButton(11, 4, "clear");  // Button added
 
-NexTouch *nex_listen_list[] = 
+static NexTouch *nex_listen_list[] = 
 {
 	&btn_validate,  // Button added
 	&btn_netonoff,
@@ -90,12 +90,17 @@ NexTouch *nex_listen_list[] =
 /* Function prototypes */
 extern void pauseSystem();
 extern void unpauseSystem();
-void updateNetworkPage();
-void terminateMessage();
+
+
+static void terminateMessage()
+{
+	Serial1.write(0xff);
+	Serial1.write(0xff);
+	Serial1.write(0xff);
+}
 
 /*Object Callbacks*/
-
-void btn_validate_PopCallback(void *ptr)
+static void btn_validate_PopCallback(void *ptr)
 {
 	flag_pot=false; /*Disallow potenciometer*/
 	uint32_t local_preheat=0;
@@ -119,7 +124,7 @@ void btn_validate_PopCallback(void *ptr)
 	r_zero=(float)local_r_zero/NUMBOX_R_ZERO;
 }
 
-void btn_netonoff_PopCallback(void *ptr)
+static void btn_netonoff_PopCallback(void *ptr)
 {
 	uint32_t local_port=0;
 	bool valid_config=true;
@@ -172,7 +177,7 @@ void btn_netonoff_PopCallback(void *ptr)
 	}
 }
 
-void btn_valpid_PopCallback(void *ptr)
+static void btn_valpid_PopCallback(void *ptr)
 {
 	uint32_t local_pid_kp=0;
 	uint32_t local_pid_ki=0;  
@@ -195,19 +200,19 @@ void btn_valpid_PopCallback(void *ptr)
 	pid_int_limit=local_pid_int_limit;
 }
 
-void btn_clear_PopCallback(void *ptr)
+static void btn_clear_PopCallback(void *ptr)
 {
 	error_count=0;
 	writeInt16ToEEPROM(ADDR_ERROR_COUNT, error_count);
 }
 
 /*Page change Callbacks*/
-void HomePagePushCallback(void *ptr)
+static void HomePagePushCallback(void *ptr)
 {
 	current_page = pg_HOME;
 }
 
-void ParamPagePushCallback(void *ptr)
+static void ParamPagePushCallback(void *ptr)
 {
 	current_page = pg_PARAM;
 	Serial1.print("n0.val=");
@@ -227,37 +232,55 @@ void ParamPagePushCallback(void *ptr)
 	terminateMessage();
 }
 
-void Graph1PagePushCallback(void *ptr)
+static void Graph1PagePushCallback(void *ptr)
 {
+	for(uint16_t i=buffer_index; i<WAVEFORM_X_RANGE; i++){
+		graph_temp.addValue(0,temp_measured_buffer[i]*GRAPH_Y_RESOLUTION/GRAPH_MAX_TEMPERATURE);
+	}
+	for(uint16_t i=0; i<buffer_index; i++){
+		graph_temp.addValue(0,temp_measured_buffer[i]*GRAPH_Y_RESOLUTION/GRAPH_MAX_TEMPERATURE);
+	}
 	current_page = pg_GRAPH1; 
 }
 
-void Graph2PagePushCallback(void *ptr)
+static void Graph2PagePushCallback(void *ptr)
 {
+	for(uint16_t i=buffer_index; i<WAVEFORM_X_RANGE; i++){
+		graph_voltage.addValue(0,voltage_rms_buffer[i]*GRAPH_Y_RESOLUTION/GRAPH_MAX_VOLTAGE);
+	}
+	for(uint16_t i=0; i<buffer_index; i++){
+		graph_voltage.addValue(0,voltage_rms_buffer[i]*GRAPH_Y_RESOLUTION/GRAPH_MAX_VOLTAGE);
+	}
 	current_page = pg_GRAPH2;
 } 
 
-void Graph3PagePushCallback(void *ptr)
+static void Graph3PagePushCallback(void *ptr)
 {
+	for(uint16_t i=buffer_index; i<WAVEFORM_X_RANGE; i++){
+		graph_current.addValue(0,current_rms_buffer[i]*GRAPH_Y_RESOLUTION/GRAPH_MAX_CURRENT);
+	}
+	for(uint16_t i=0; i<buffer_index; i++){
+		graph_current.addValue(0,current_rms_buffer[i]*GRAPH_Y_RESOLUTION/GRAPH_MAX_CURRENT);
+	}
 	current_page = pg_GRAPH3;
 }
 
-void InfoPagePushCallback(void *ptr)
+static void InfoPagePushCallback(void *ptr)
 {
 	current_page = pg_INFO;
 }
 
-void HelpPagePushCallback(void *ptr)
+static void HelpPagePushCallback(void *ptr)
 {
 	current_page = pg_HELP;
 }
 
-void ErrorPagePushCallback(void *ptr)
+static void ErrorPagePushCallback(void *ptr)
 {
 	current_page = pg_ERROR;
 }
 
-void NetworkPagePushCallback(void *ptr)
+static void NetworkPagePushCallback(void *ptr)
 {
 	current_page = pg_NETWORK;
 
@@ -265,7 +288,7 @@ void NetworkPagePushCallback(void *ptr)
 	Serial1.print(network_port);
 	terminateMessage();
 
-	Serial1.print("txt_static_ipval.txt=\"");
+	Serial1.print("staticipval.txt=\"");
 	for(uint8_t i=0; i<IP_ARRAY_SIZE; i++)
 	{
 		Serial1.print(static_ip_arr[i]);
@@ -278,7 +301,7 @@ void NetworkPagePushCallback(void *ptr)
 	terminateMessage();
 }
 
-void PIDPagePushCallback(void *ptr)
+static void PIDPagePushCallback(void *ptr)
 {
 	current_page = pg_PID;
 
@@ -299,7 +322,7 @@ void PIDPagePushCallback(void *ptr)
 	terminateMessage();
 }
 
-void LogPagePushCallback(void *ptr)
+static void LogPagePushCallback(void *ptr)
 {
 	current_page = pg_PID;
 	Serial1.print("log.txt=");
@@ -506,16 +529,12 @@ void resetDisplay()
 	//Serial1.print("rest"); //Reset display
 	//terminateMessage();
 
-	//stopEthernet();
-	//network_state = 0;
+	stopEthernet();
+	network_state = 0;
 }
 
 void eventCheck() {
 	nexLoop(nex_listen_list);  // Check for any touch event
 }
 
-void terminateMessage(){
-	Serial1.write(0xff);
-	Serial1.write(0xff);
-	Serial1.write(0xff);
-}
+

@@ -14,7 +14,8 @@
 
 #define DEBUG_GENERAL 1 /* Prints some information about the system to the Serial port */
 #define DEBUG_CONTROL 0 /* Prints information about PID controller to the Serial port*/
-#define ERRORCHECKING 0 /* Enables checking of errors during operation */
+#define ERRORCHECKING 1 /* Enables checking of errors during operation */
+#define CALIBRATION 0 /* Enables auto calibration of sensors when IDLE */
 
 /* Constants for timing */
 static const uint32_t COUNT_POLLING = (PERIOD_POLLING / PERIOD_MAIN);
@@ -26,13 +27,14 @@ static const uint32_t COUNT_DISPLAY = (PERIOD_DISPLAY / PERIOD_MAIN);
 /* Sampling */
 static const int32_t SAMPLES_PER_PERIOD = PERIOD_230V/PERIOD_SAMPLING; /* Number of samples to be taken for each period */
 static volatile uint8_t sample_count = 0; /* Counts samples taken */
-static volatile int32_t sum_current = 0; /* Storage of current samples^2 */
-static volatile int32_t sum_voltage = 0; /* Storage of voltage samples^2 */
+static volatile uint64_t sum_current = 0; /* Storage of current samples^2 */
+static volatile uint64_t sum_voltage = 0; /* Storage of voltage samples^2 */
 static volatile int32_t calibration_current_sensor = 0; /* Storage of current samples for calibration of sensor */
 static volatile int32_t calibration_voltage_sensor = 0; /* Storage of voltage samples for calibration of sensor */
 
 /*Control*/
 static volatile uint32_t temp_setpoint = 0; /* Internal setpoint to be applied to control routine*/
+static volatile int32_t last_pot_temp = 0;
 volatile uint32_t temp_sealing = 0; /* Value defined by user*/
 volatile uint32_t temp_preheat = 0; /* Value defined by user*/
 volatile uint32_t temp_measured = 0; /* Calculated value from resistance */
@@ -45,6 +47,12 @@ volatile float pid_kd=0.001; // 0.001
 volatile uint32_t pid_int_limit=10; //10
 volatile float temp_coef = 0.0006;
 volatile float r_zero = 1.01;
+
+/*Buffers*/
+volatile uint32_t temp_measured_buffer[WAVEFORM_X_RANGE]={0};
+volatile float current_rms_buffer[WAVEFORM_X_RANGE]={0};
+volatile float voltage_rms_buffer[WAVEFORM_X_RANGE]={0};
+volatile uint32_t buffer_index=0;
 
 /*Error Logging*/
 volatile uint16_t error_count = 0;
@@ -64,7 +72,7 @@ static volatile uint32_t count_display = 0;
 static volatile bool flag_control = false; /* Flag to signal that the control routine can be called*/
 static volatile bool flag_sampling = false; /* Flag to signal that the sampling routine can be called*/
 static volatile bool flag_execute = true; /* Flag to signal that the sm_execute routine can be called*/
-volatile bool flag_pot = true; /* Flag allow the potentiometer to set a new sealing temperature */
+volatile bool flag_pot = false; /* Flag allow the potentiometer to set a new sealing temperature */
 
 /*State machines*/
 static sm_t main_machine;
@@ -240,7 +248,7 @@ static void controlTemp(uint16_t setpoint) {
   proportional=temp_error;
 
   /*Controlo*/
-  derivative=(temp_error-temp_error_old)/(PERIOD_CONTROL/100000); /* Period from microseconds to seconds*/
+  derivative=(temp_error-temp_error_old)/((float)PERIOD_CONTROL/100000); /* Period from microseconds to seconds*/
 
   integral += temp_error;
   if (integral >  pid_int_limit) integral =  pid_int_limit;
@@ -260,7 +268,7 @@ static void controlTemp(uint16_t setpoint) {
   analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
 
 #if DEBUG_CONTROL
-  Serial.print("\n");
+  Serial.print("\x1b[2J"); /*Clear screen*/
   Serial.print("Proportional Component: ");
   Serial.println(proportional*pid_kp);
   Serial.print("Integral Component: ");
@@ -276,14 +284,13 @@ static void controlTemp(uint16_t setpoint) {
 
 void readPot() {
   /*Check Pot value*/
-  static int32_t new_temp = 0;
-  static int32_t last_temp = 0;
+  int32_t new_temp = 0;
 
   new_temp=(analogRead(ANALOGpin_pot)*(MAX_TEMPERATURE+1))>>ADC_RESOLUTION;
-  if( (abs((int32_t)last_temp-(int32_t)new_temp) >= POT_HYSTERESIS) || flag_pot == true ) /* Only change sealing temp if new temp is > hysteresis */
+  if( (abs((int32_t)last_pot_temp-(int32_t)new_temp) >= POT_HYSTERESIS) || flag_pot == true ) /* Only change sealing temp if new temp is > hysteresis */
   {
     flag_pot=true;
-    last_temp=new_temp;
+    last_pot_temp=new_temp;
     temp_sealing=new_temp;
   }
 }
@@ -308,6 +315,20 @@ static int32_t sampleVoltage() {
     sample-=calibration_voltage_sensor;
   }
   return sample;
+}
+
+void addToBuffer(uint32_t voltage, uint32_t current, uint32_t temperature)
+{
+      /*Add to buffers*/
+  voltage_rms_buffer[buffer_index]=voltage;
+  current_rms_buffer[buffer_index]=current;
+  temp_measured_buffer[buffer_index]=temperature;
+
+  buffer_index++;
+  if(buffer_index==WAVEFORM_X_RANGE)
+  {
+    buffer_index=0;
+  }
 }
 
 static void errorHandler(int16_t error_code) {
@@ -403,7 +424,9 @@ void setup() {
   pinMode(IOpin_alarm, OUTPUT);
   pinMode(CTRLpin_PWM, OUTPUT);
   pinMode(CTRLpin_OnOff, OUTPUT);
-  pinMode(CTRLpin_zerocross, INPUT);
+
+  pinMode(11, OUTPUT);
+  digitalWrite(11, LOW);
 
   /*Initialize digital outputs*/
   digitalWrite(IOpin_alarm, LOW);
@@ -424,6 +447,9 @@ void setup() {
   /*Initialize state machine*/
   sm_init(&main_machine, st_OFF);
   sm_init(&sub_machine, st_IDLE);
+
+  last_pot_temp=(analogRead(ANALOGpin_pot)*(MAX_TEMPERATURE+1))>>ADC_RESOLUTION;
+
   Serial.println("Running.");
 }
 
@@ -440,8 +466,8 @@ void loop() {
 
   /*Variables for temperature calculation*/
   static float resistance_rms = 0;
-  static const float T_slope=1/(temp_coef*r_zero);
-  static const float T_b=1/temp_coef-T_ZERO;
+  float T_slope=1/(temp_coef*r_zero);
+  float T_b=1/temp_coef-T_ZERO;
 
   /*Variable to store ADC samples */
   static int32_t sample = 0;
@@ -524,9 +550,20 @@ void loop() {
     count_execute_sm=0;
   }
 
+  int flag=0;
   /*Sampling*/
   if (count_sampling >= COUNT_SAMPLING && flag_sampling == true)
   {
+    if(flag==1)
+    {
+      flag=0;
+      digitalWrite(11, LOW);
+    }
+    else
+    {
+      flag=1;
+      digitalWrite(11, HIGH);
+    }
 
     sample=sampleCurrent();
     sum_current += sample*sample;
@@ -545,13 +582,20 @@ void loop() {
 
     sample_count++;
     
-
     if(sample_count>=SAMPLES_PER_PERIOD)
     {
       if(flag_control == false)
       {
+        #if CALIBRATION
         calibration_current_sensor=calibration_current_sum/SAMPLES_PER_PERIOD;
         calibration_voltage_sensor=calibration_voltage_sum/SAMPLES_PER_PERIOD;
+        if(calibration_current_sensor > MAX_CALIBRATION_VALUE|| calibration_voltage_sensor > MAX_CALIBRATION_VALUE)
+        {
+          calibration_current_sensor = 0;
+          calibration_voltage_sensor = 0;
+          errorHandler(ERROR_SENSORS_ANOMALY);
+        }
+        #endif
         calibration_current_sum = 0;
         calibration_voltage_sum = 0;
       }
@@ -574,8 +618,15 @@ void loop() {
       }
 
       resistance_rms = voltage_rms / current_rms;
-
-      temp_measured = (resistance_rms*T_slope-T_b);/* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
+      
+      if(sub_machine.current_state==st_IDLE || sub_machine.current_state==st_CYCLESTART)
+      {
+        temp_measured = T_ZERO;
+      }
+      else
+      {
+        temp_measured = (resistance_rms*T_slope-T_b); /* T=R*1/(TEMP_COEF*R_ZERO)+(1/TEMP_COEF-T_ZERO)*/
+      }
 
       #if ERRORCHECKING
       if(voltage_rms>MAX_VOLTAGE_RMS)
@@ -629,6 +680,7 @@ void loop() {
   if(count_display >= COUNT_DISPLAY)
   {
     readPot();
+    addToBuffer((uint32_t)voltage_rms/100, (uint32_t)current_rms/100, temp_measured);
     updateDisplay(sub_machine.current_state, start_state, preheat_state, sealing_state);
     count_display = 0;
 
@@ -645,14 +697,16 @@ void loop() {
     Serial.println(voltage_rms/100);
     Serial.print("\rCurrent RMS: ");
     Serial.println(current_rms/100);
+    Serial.print("\rResistance: ");
+    Serial.println(resistance_rms);
+    Serial.print("Ref. Resistance: ");
+    Serial.println(r_zero);
     Serial.print("\rState: ");
     printState(&main_machine);
     Serial.print("\rSubstate: ");
     printState(&sub_machine);
     #endif
   }
-
-  
 
   #if DEBUG_GENERAL
   /* Keyboard Simulation to test state machine*/

@@ -23,7 +23,7 @@
 // Useful for more complex situations, where the key name as well as its value is important, or there are mutliple key-value pairs
 //    function?params=hello    ==> params=hello gets passed to the function
 #ifndef AREST_PARAMS_MODE
-#define AREST_PARAMS_MODE 0
+#define AREST_PARAMS_MODE 1
 #endif
 
 // Use light answer mode
@@ -32,10 +32,10 @@
 #endif 
 
 // Default number of max. exposed variables
-#define NUMBER_VARIABLES 5
+#define NUMBER_VARIABLES 10
 
 // Default number of max. exposed functions
-#define NUMBER_FUNCTIONS 5
+#define NUMBER_FUNCTIONS 10
 
 #ifdef AREST_BUFFER_SIZE
   #define OUTPUT_BUFFER_SIZE AREST_BUFFER_SIZE
@@ -120,12 +120,6 @@ public:
   }
 }
 
-// Send HTTP headers for Ethernet & WiFi
-void send_http_headers(){
-
-  //addToBufferF(F("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, PUT, OPTIONS\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n"));
- 
-}
 
 // Reset variables after a request
 void reset_status() {
@@ -308,21 +302,6 @@ void urldecode(String &arguments) {
 bool send_command(bool headers, bool decodeArgs) {
 
   // Start of message
-  if (headers && command != 'r') {
-    send_http_headers();
-  }
-  /*
-  // Variable selected
-  if (command == 'v') {
-    // Send feedback to client
-    if (LIGHTWEIGHT) {
-      variables[value]->addToBuffer(this);
-    } else {
-      addToBufferF(F("{"));
-      addVariableToBuffer(value);
-      addToBufferF(F(", "));
-    }
-  }*/
 
   // Function selected
   if (command == 'f') {
