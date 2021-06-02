@@ -122,8 +122,8 @@ body{
 
 
 .wrapper .main_content{
-  width: 89,5;          /* POSSIVELMENTE TENHO QUE ALTERAR ISTO PQ MUDEI DE 200px PARA 230px*/
-  margin-left: 230px;
+  width: 89,5;          /* POSSIVELMENTE TENHO QUE ALTERAR ISTO PQ MUDEI DE 200px PARA 230px a width em .wrapper .sidebar{*/
+  margin-left: 235px;
 }
 /*
 .wrapper .main_content .header{
@@ -155,14 +155,14 @@ body{
 /* -------- Align forms --------*/
 label{
   display:inline-block;
-  width:100px;
-  text-align:right;
-}
+  width:170px;
+  text-align:left;
+  }
 
 
-/*---  -----*/
-.main_content .header .text{
-  position: absolute;
-  left: 220px;
-  top: 150px;
-}
+  /*---  -----*/
+  .main_content .header .text{
+    position: absolute;
+    left: 220px;
+    top: 150px;
+  }
