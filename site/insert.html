@@ -40,16 +40,36 @@
                 </div> 
 
                 <div class="info">
-                    <form>
-                        <label for="fname" style="color: black;">Pr&eacute-aquecimento (&degC): </label>
-                        <input type="text" id="setpoint"><br>
-                        <label for="lname" style="color: black;">Selagem (&degC):</label>
-                        <input type="text" id="temp" ><br>
-                        <input type="submit" value="Submit">
+                    <form class="form" id="myForm" >
+                        <label for="preheat" style="color: black;">Pr&eacute-aquecimento (&degC): </label>
+                        <input type="text" id="preheat" name="preheat"><br>
+                        <label for="seal" style="color: black;">Selagem (&degC):</label>
+                        <input type="text" id="seal" name="seal"><br>
+                        <!-- <input type="submit" value="Submit"> -->
+                        <button type="submit">Enviar</button>
                     </form>
-              </div>
+
+                    <script>
+                        const myForm = document.getElementById("myForm");
+
+                        myForm.addEventListener('submit', function (e){
+                            e.preventDefault(); // para garantir que a pág não atualiza quando se carrega no "send"
+
+                            const formData = new FormData(this);
+                            fetch('NOME_DA_PÁG', {  //tem que se alterar para o nome onde se pretende enviar os dados
+                                method: 'post',
+                                body: formData
+                            }).then(function(response){
+                                return response.text();
+                            }).then(function (text){
+                                console.log(text);
+                            }).catch(function(error) {
+                                console.error(error);
+                            })
+                        });
+                    </script>
+                </div>
             </div>
         </div>        
     </body>
-
 </html>
