@@ -56,8 +56,9 @@
                     </form>
 
                     <script>
-                        var ip = String(get_ip());
                         function send_preheat(){
+                            var local_ip = localStorage.getItem("IpSaved");
+
                             var preheat_value = document.getElementById("preheat").value;
                             submitOK = "true";
                             
@@ -67,19 +68,20 @@
                             }
                             
                             var protocol = "http://";
-                            //var ip = String(get_ip());
 
-                            var data = String(protocol)+ip+String("/set_temp_preheat?")+String(preheat_value)
+                            var data = String(protocol)+String(local_ip)+String("/set_preheat?")+String(preheat_value)
                             
                             if (submitOK == "false") {
                                 return false;
                             }else{
                                 fetch(data)
+                                console.log(data);
                             }
                             
                         }
 
                         function send_seal(){
+                            var local_ip = localStorage.getItem("IpSaved");
                             var seal_value = document.getElementById("seal").value;
                             submitOK = "true";
                             
@@ -89,35 +91,21 @@
                             }
 
                             var protocol = "http://";
-                            //var ip = String("192.168.169");
                                                      
-                            var data = String(protocol)+ip+String("/set_temp_seal?")+String(seal_value)
+                            var data = String(protocol)+String(local_ip)+String("/set_seal?")+String(seal_value)
 
                             if (submitOK == "false") {
                                 return false;
                             }else{
                                 fetch(data)
+                                console.log(data);
                             }
                         }
 
                         function get_ip(){
-                            /*
-                            const fs = require('fs')
-                            
-                            fs.readFile('IP_config.txt', 'utf-8', (err, data) => {
-                                if (err) throw err;
-                                
-                                console.log(data);
-                                //return data;
-                            })*/
-                            var ip_value = String(document.getElementById("ip").value);
-                            var copy;
-                            //insert.html?ip=192&preheat=&seal=:115
-
-                            //ip_value = ip_value.replace('insert.html?ip=','');
-                            copy = ip_value.slice(15);
-                            console.log(copy);
-                            //return ip_value
+                            var ip_value = document.getElementById("ip").value;
+                            localStorage.setItem("IpSaved", ip_value);
+                            console.log(ip_value);
                         }
 
                     </script>

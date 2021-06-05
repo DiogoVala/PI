@@ -48,7 +48,11 @@
                     let a;
                     getData()
                     function getData() {
-                        fetch('http://192.168.1.169/read_temp')
+                        var local_ip = localStorage.getItem("IpSaved");
+                        var protocol = "http://";
+                        var data = String(protocol)+String(local_ip)+String("/read_current")
+
+                        fetch(data)
                           .then(function(response) {
                             return response.text();
                           })
