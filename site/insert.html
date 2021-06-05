@@ -42,31 +42,70 @@
                 <div class="info">
                     <form class="form" id="myForm" >
                         <label for="preheat" style="color: black;">Pr&eacute-aquecimento (&degC): </label>
-                        <input type="text" id="preheat" name="preheat"><br>
+                        <input type="text" id="preheat" name="preheat">
+                        <button onclick="send_preheat()" type="submit">Enviar Valor</button>
+                        <br>
                         <label for="seal" style="color: black;">Selagem (&degC):</label>
-                        <input type="text" id="seal" name="seal"><br>
-                        <!-- <input type="submit" value="Submit"> -->
-                        <button type="submit">Enviar</button>
+                        <input type="text" id="seal" name="seal">
+                        <button onclick="send_seal()" type="submit">Enviar Valor</button>
                     </form>
 
                     <script>
-                        const myForm = document.getElementById("myForm");
+                        var ip = String(get_ip());
+                        function send_preheat(){
+                            var preheat_value = document.getElementById("preheat").value;
+                            submitOK = "true";
+                            
+                            if (isNaN(preheat_value) || preheat_value < 0 || preheat_value.length ==0) {
+                                alert("A temperatura deve ser um valor positivo");
+                                submitOK = "false";
+                            }
+                            
+                            var protocol = "http://";
+                            //var ip = String(get_ip());
 
-                        myForm.addEventListener('submit', function (e){
-                            e.preventDefault(); // para garantir que a pág não atualiza quando se carrega no "send"
+                            var data = String(protocol)+ip+String("/set_temp_preheat?")+String(preheat_value)
+                            
+                            if (submitOK == "false") {
+                                return false;
+                            }else{
+                                fetch(data)
+                            }
+                            
+                        }
 
-                            const formData = new FormData(this);
-                            fetch('NOME_DA_PÁG', {  //tem que se alterar para o nome onde se pretende enviar os dados
-                                method: 'post',
-                                body: formData
-                            }).then(function(response){
-                                return response.text();
-                            }).then(function (text){
-                                console.log(text);
-                            }).catch(function(error) {
-                                console.error(error);
+                        function send_seal(){
+                            var seal_value = document.getElementById("seal").value;
+                            submitOK = "true";
+                            
+                            if (isNaN(seal_value) || seal_value < 0 || seal_value.length ==0) {
+                                alert("A temperatura deve ser um valor positivo");
+                                submitOK = "false";
+                            }
+
+                            var protocol = "http://";
+                            //var ip = String("192.168.169");
+                                                     
+                            var data = String(protocol)+ip+String("/set_temp_seal?")+String(seal_value)
+
+                            if (submitOK == "false") {
+                                return false;
+                            }else{
+                                fetch(data)
+                            }
+                        }
+
+                        function get_ip(){
+                            const fs = require('fs')
+  
+                            fs.readFile('IP_config.txt', 'utf-8', (err, data) => {
+                                if (err) throw err;
+                                
+                                console.log(data);
+                                //return data;
                             })
-                        });
+                        }
+
                     </script>
                 </div>
             </div>
