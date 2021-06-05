@@ -3,6 +3,7 @@
     <head>
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
         <title>Controlo Heatband</title>
+        <meta content="IP_config.txt">
         <link rel="stylesheet" href="style.css">    <!-- isto é para ligar ao ficheiro CSS -->
     </head>
 
@@ -41,6 +42,10 @@
 
                 <div class="info">
                     <form class="form" id="myForm" >
+                        <label for="ip" style="color: black;">IP: </label>
+                        <input type="text" id="ip" name="ip">
+                        <button onclick="get_ip()" type="submit">Inserir</button>
+                        <br>
                         <label for="preheat" style="color: black;">Pr&eacute-aquecimento (&degC): </label>
                         <input type="text" id="preheat" name="preheat">
                         <button onclick="send_preheat()" type="submit">Enviar Valor</button>
@@ -96,14 +101,23 @@
                         }
 
                         function get_ip(){
+                            /*
                             const fs = require('fs')
-  
+                            
                             fs.readFile('IP_config.txt', 'utf-8', (err, data) => {
                                 if (err) throw err;
                                 
                                 console.log(data);
                                 //return data;
-                            })
+                            })*/
+                            var ip_value = String(document.getElementById("ip").value);
+                            var copy;
+                            //insert.html?ip=192&preheat=&seal=:115
+
+                            //ip_value = ip_value.replace('insert.html?ip=','');
+                            copy = ip_value.slice(15);
+                            console.log(copy);
+                            //return ip_value
                         }
 
                     </script>
