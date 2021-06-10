@@ -3,7 +3,6 @@
     <head>
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
         <title>Controlo Heatband</title>
-        <meta content="IP_config.txt">
         <link rel="stylesheet" href="style.css">    <!-- isto é para ligar ao ficheiro CSS -->
     </head>
 
@@ -41,7 +40,7 @@
                 </div> 
 
                 <div class="info">
-                    <form class="form" id="myForm" >
+                    <form class="form" id="myForm">
                         <label for="ip" style="color: black;">IP: </label>
                         <input type="text" id="ip" name="ip">
                         <button onclick="get_ip()" type="submit">Inserir</button>
@@ -57,49 +56,17 @@
 
                     <script>
                         function send_preheat(){
-                            var local_ip = localStorage.getItem("IpSaved");
-
                             var preheat_value = document.getElementById("preheat").value;
-                            submitOK = "true";
-                            
-                            if (isNaN(preheat_value) || preheat_value < 0 || preheat_value.length ==0) {
-                                alert("A temperatura deve ser um valor positivo");
-                                submitOK = "false";
-                            }
-                            
-                            var protocol = "http://";
-
-                            var data = String(protocol)+String(local_ip)+String("/set_preheat?")+String(preheat_value)
-                            
-                            if (submitOK == "false") {
-                                return false;
-                            }else{
-                                fetch(data)
-                                console.log(data);
-                            }
-                            
+                            localStorage.setItem("preheat_val", preheat_value);
+                            var preheat_flag = 1;
+                            localStorage.setItem("flag_preheat", preheat_flag);            
                         }
 
                         function send_seal(){
-                            var local_ip = localStorage.getItem("IpSaved");
                             var seal_value = document.getElementById("seal").value;
-                            submitOK = "true";
-                            
-                            if (isNaN(seal_value) || seal_value < 0 || seal_value.length ==0) {
-                                alert("A temperatura deve ser um valor positivo");
-                                submitOK = "false";
-                            }
-
-                            var protocol = "http://";
-                                                     
-                            var data = String(protocol)+String(local_ip)+String("/set_seal?")+String(seal_value)
-
-                            if (submitOK == "false") {
-                                return false;
-                            }else{
-                                fetch(data)
-                                console.log(data);
-                            }
+                            localStorage.setItem("seal_val", seal_value);
+                            var seal_flag = 1;
+                            localStorage.setItem("flag_seal", seal_flag);
                         }
 
                         function get_ip(){
@@ -108,6 +75,71 @@
                             console.log(ip_value);
                         }
 
+                        setInterval(function(){
+                            var seal_flag = localStorage.getItem("flag_seal");
+                            if(seal_flag==1)
+                            {
+                                var protocol = "http://";
+                                var local_ip = localStorage.getItem("IpSaved");
+                                var seal_value = localStorage.getItem("seal_val");
+                                submitOK = "true";
+                                
+                                
+                                if (isNaN(seal_value) || seal_value < 0 || seal_value.length ==0) {
+                                    alert("A temperatura deve ser um valor positivo");
+                                    submitOK = "false";
+                                }
+                                                         
+                                var data = String(protocol)+String(local_ip)+String("/set_seal?")+String(seal_value)
+
+                                if (submitOK == "false") {
+                                    return false;
+                                }else{
+                                    fetch(data)
+                                    console.log(data);
+                                }
+                                seal_flag = 0;
+                                localStorage.setItem("flag_seal", seal_flag);
+                            }
+
+                            var preheat_flag = localStorage.getItem("flag_preheat");
+
+                            if(preheat_flag == 1)
+                            {
+                                var protocol = "http://";
+                                var local_ip = localStorage.getItem("IpSaved");
+                                var preheat_value = localStorage.getItem("preheat_val");
+                                submitOK = "true";
+                                
+                                
+                                if (isNaN(preheat_value) || preheat_value < 0 || preheat_value.length ==0) {
+                                    alert("A temperatura deve ser um valor positivo");
+                                    submitOK = "false";
+                                }
+                                
+                                var data = String(protocol)+String(local_ip)+String("/set_preheat?")+String(preheat_value)
+
+                                if (submitOK == "false") {
+                                    return false;
+                                }
+                                else {
+                                    console.log(data);
+                                    fetch(data)
+                                        .then(function(response) {
+                                            return response.text();
+                                    })
+                                        .then(function(text) {
+                                            a = parseInt(text);
+                                            console.log(a);
+                                    })
+                                        .catch(function (error) {
+                                            console.log("Error: " + error);
+                                    });
+                                }
+                                preheat_flag = 0;
+                                localStorage.setItem("flag_preheat", preheat_flag);  
+                            }
+                        },100);
                     </script>
                 </div>
             </div>
