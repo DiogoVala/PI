@@ -1,11 +1,11 @@
 # Repositório de Projeto Industrial 2020/2021
 # Termorregulador Digital
-Inês Lopes
-Beatriz Silva
-Diogo Fernandes
-Diogo Vala
-João Soares
-Fabricio Botelho
+Inês Lopes; 
+Beatriz Silva; 
+Diogo Fernandes; 
+Diogo Vala; 
+João Soares; 
+Fabricio Botelho; 
 
 Orientador: Pedro Fonseca
 
