@@ -120,6 +120,10 @@ public:
   }
 }
 
+void send_http_headers(){
+  addToBufferF(F("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, PUT, OPTIONS\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n"));
+}
+
 
 // Reset variables after a request
 void reset_status() {
@@ -302,6 +306,9 @@ void urldecode(String &arguments) {
 bool send_command(bool headers, bool decodeArgs) {
 
   // Start of message
+  if (headers && command != 'r') {
+    send_http_headers();
+  }
 
   // Function selected
   if (command == 'f') {
@@ -310,6 +317,7 @@ bool send_command(bool headers, bool decodeArgs) {
     if (decodeArgs)
       urldecode(arguments); // Modifies arguments
 
+    //send_http_headers();
     int result = functions[value](arguments);
 
     // Send feedback to client

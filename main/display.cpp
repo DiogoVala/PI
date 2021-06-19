@@ -515,19 +515,11 @@ void updateDisplay(int state, int input_start, int input_preheat, int input_seal
 	}
 }
 
-void errorPage()
-{
-	Serial1.print("code_c");
-	terminateMessage();
-	Serial1.print("page Error");
-	terminateMessage();
-}
-
 void resetDisplay()
 {
-	//current_page=pg_START;
-	//Serial1.print("rest"); //Reset display
-	//terminateMessage();
+	current_page=pg_START;
+	Serial1.print("rest"); //Reset display
+	terminateMessage();
 
 	stopEthernet();
 	network_state = 0;
@@ -536,5 +528,3 @@ void resetDisplay()
 void eventCheck() {
 	nexLoop(nex_listen_list);  // Check for any touch event
 }
-
-

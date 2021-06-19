@@ -12,10 +12,10 @@
 #include "config.h"
 #include "memory.h"
 
-#define DEBUG_GENERAL 1 /* Prints some information about the system to the Serial port */
+#define DEBUG_GENERAL 0 /* Prints some information about the system to the Serial port */
 #define DEBUG_CONTROL 0 /* Prints information about PID controller to the Serial port*/
 #define ERRORCHECKING 1 /* Enables checking of errors during operation */
-#define CALIBRATION 0 /* Enables auto calibration of sensors when IDLE */
+#define CALIBRATION 1 /* Enables auto calibration of sensors when IDLE */
 
 /* Constants for timing */
 static const uint32_t COUNT_POLLING = (PERIOD_POLLING / PERIOD_MAIN);
@@ -78,6 +78,8 @@ volatile bool flag_pot = false; /* Flag allow the potentiometer to set a new sea
 static sm_t main_machine;
 static sm_t sub_machine;
 
+volatile int32_t sample_t=0;
+
 static void _timer_ISR() {
   count_polling++;
   count_sampling++;
@@ -92,7 +94,7 @@ static void sm_execute_main(sm_t *psm) {
     /*************** OFF ***************/
     case st_OFF:
     /*State Actions*/
-    digitalWrite(IOpin_alarm, LOW);
+    digitalWrite(IOpin_alarm, HIGH);
     digitalWrite(CTRLpin_OnOff, LOW);
     flag_sampling=false;
     flag_control=false;
@@ -117,12 +119,11 @@ static void sm_execute_main(sm_t *psm) {
     /*Transitions*/
     if (psm->last_event == ev_ENABLE_LOW)
     {
-      psm->current_state = st_OFF;
-      sm_init(&sub_machine, st_IDLE);
+      sysReset();
     }
     if (psm->last_event == ev_RESET)
     {
-      //sysReset();
+      sysReset();
     }
 
     sm_execute_sub(&sub_machine);
@@ -139,15 +140,11 @@ static void sm_execute_main(sm_t *psm) {
     /*Transitions*/
     if (psm->last_event == ev_ENABLE_LOW)
     {
-      resetDisplay();
-      psm->current_state = st_OFF;
-      sm_init(&sub_machine, st_IDLE);
+      sysReset();
     }
     if (psm->last_event == ev_RESET)
     {
-      resetDisplay();
-      psm->current_state = st_ON;
-      sm_init(&sub_machine, st_IDLE);
+      sysReset();
     }
     break;
   }
@@ -238,7 +235,7 @@ static void sm_execute_sub(sm_t *psm) {
 static void controlTemp(uint16_t setpoint) {
 
   static int32_t temp_error_old = 0; /* 0 to ~400º - Old error for derivative component*/
-  static double integral = 0; /* Integral component of PID*/
+  static int32_t integral = 0; /* Integral component of PID*/
   static double derivative = 0; /* Derivative component of PID*/
   static double proportional = 0;
 
@@ -250,11 +247,11 @@ static void controlTemp(uint16_t setpoint) {
   /*Controlo*/
   derivative=(temp_error-temp_error_old)/((float)PERIOD_CONTROL/100000); /* Period from microseconds to seconds*/
 
-  integral += temp_error;
+  integral = integral + temp_error;
   if (integral >  pid_int_limit) integral =  pid_int_limit;
   if (integral < -pid_int_limit) integral = -pid_int_limit;
 
-  new_duty_cycle += ((proportional*pid_kp) + (integral*pid_ki) + (derivative*pid_kd));
+  new_duty_cycle += ((proportional*pid_kp) + (integral/10) + (derivative*pid_kd));
 
   if (new_duty_cycle > MAX_DUTY_CYCLE) {
     new_duty_cycle = MAX_DUTY_CYCLE;
@@ -265,14 +262,14 @@ static void controlTemp(uint16_t setpoint) {
 
   duty_cycle = new_duty_cycle;
   
-  analogWrite(CTRLpin_PWM, new_duty_cycle); /* Sinal de controlo do controlador*/
+  analogWrite(CTRLpin_PWM, duty_cycle); /* Sinal de controlo do controlador*/
 
 #if DEBUG_CONTROL
   Serial.print("\x1b[2J"); /*Clear screen*/
   Serial.print("Proportional Component: ");
   Serial.println(proportional*pid_kp);
   Serial.print("Integral Component: ");
-  Serial.println(integral*pid_ki);
+  Serial.println((int32_t)integral/10);
   Serial.print("Derivative Component: ");
   Serial.println(derivative*pid_kd);
   Serial.print("DC: ");
@@ -298,18 +295,22 @@ void readPot() {
 static int32_t sampleCurrent() {
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_current);
+ 
   sample = (sample * CURRENT_M)-CURRENT_B;
   if(flag_control==true)
   {
     sample-=calibration_current_sensor;
   }
+  
   return sample;
 }
 
 static int32_t sampleVoltage() {
   int32_t sample = 0;
   sample = analogRead(ANALOGpin_voltage);
+  sample_t=sample*3300/4095;
   sample = (sample * VOLTAGE_M)-VOLTAGE_B;
+  
   if(flag_control==true)
   {
     sample-=calibration_voltage_sensor;
@@ -343,9 +344,8 @@ static void errorHandler(int16_t error_code) {
     {
       error_count=0;
     }
-    errorPage();
     last_error=error_code;
-    //sm_send_event(&main_machine, ev_OK_LOW);
+    sm_send_event(&main_machine, ev_OK_LOW);
   }
 }
 
@@ -476,6 +476,8 @@ void loop() {
   static int32_t calibration_current_sum = 0;
   static int32_t calibration_voltage_sum = 0;
 
+  static int32_t max_sample_t=0;
+
   /* Polling*/
   if (count_polling >= COUNT_POLLING)
   {
@@ -550,26 +552,20 @@ void loop() {
     count_execute_sm=0;
   }
 
-  int flag=0;
   /*Sampling*/
   if (count_sampling >= COUNT_SAMPLING && flag_sampling == true)
   {
-    if(flag==1)
-    {
-      flag=0;
-      digitalWrite(11, LOW);
-    }
-    else
-    {
-      flag=1;
-      digitalWrite(11, HIGH);
-    }
 
     sample=sampleCurrent();
     sum_current += sample*sample;
     if(flag_control == false)
     {
       calibration_current_sum+=sample;
+    }
+    if(sample_t>max_sample_t)
+    {
+      max_sample_t=sample_t;
+      Serial.println(max_sample_t);
     }
 
     sample=sampleVoltage();

@@ -7,8 +7,8 @@
 
 /**** Analog Pins ****/
 #define ANALOGpin_pot 14
-#define ANALOGpin_current 16
-#define ANALOGpin_voltage 15
+#define ANALOGpin_current 15
+#define ANALOGpin_voltage 16
 
 /**** Digital Pins ****/
 /*PLC Signals*/
@@ -43,17 +43,17 @@
 
 /*Periods ( in microseconds) */
 #define PERIOD_230V 20000
-#define PERIOD_POLLING 100
+#define PERIOD_POLLING 1000
 #define PERIOD_SAMPLING 100
-#define PERIOD_CONTROL 10000
+#define PERIOD_CONTROL 20000
 #define PERIOD_SM_EXECUTE 1000
 #define PERIOD_DISPLAY 100000
 
 /*Sensors*/
-#define CURRENT_M 2.59973 /* Linearization slope */
-#define CURRENT_B 5321 /* Linearization constant */
-#define VOLTAGE_M 3.64798 /* Linearization slope */
-#define VOLTAGE_B 7466 /* Linearization constant */
+#define CURRENT_M 1.947/* Linearization slope */
+#define CURRENT_B 3986/* Linearization constant */
+#define VOLTAGE_M 3.33 /* Linearization slope */
+#define VOLTAGE_B 6822 /* Linearization constant */
 #define T_ZERO 20 /* Ambient temperature */
 #define MAX_CALIBRATION_VALUE 250 /* System will not calibrate if sensor value is at no load is larger than this*/
 
