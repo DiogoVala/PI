@@ -53,8 +53,7 @@
                         var protocol = "http://";
                         var data = String(protocol)+String(local_ip)+String("/read_temp")
 
-                        //fetch(data)
-                        fetch('http://192.168.1.169/set_preheat?150')
+                        fetch(data)
                           .then(function(response) {
                             return response.text();
                           })
